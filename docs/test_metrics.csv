@@ -1,0 +1,6 @@
+﻿model,imgsz,split,n_images,date,scope,class_id,class_name,num_objects,precision,recall,map50,map50_95
+best.pt,416,test,120,2026-10-28 03:36,all,,Tất cả,120,0.9907,0.9944,0.995,0.877
+best.pt,416,test,120,2026-10-28 03:36,class,0,Cấm đỗ xe,37,0.9966,1.0,0.995,0.8411
+best.pt,416,test,120,2026-10-28 03:36,class,1,Cấm dừng và đỗ xe,20,0.9995,1.0,0.995,0.7675
+best.pt,416,test,120,2026-10-28 03:36,class,2,Cấm rẽ trái,38,1.0,0.9777,0.995,0.9515
+best.pt,416,test,120,2026-10-28 03:36,class,3,Cấm rẽ phải,25,0.9668,1.0,0.995,0.948

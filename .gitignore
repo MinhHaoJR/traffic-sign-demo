@@ -224,6 +224,7 @@ data/raw/
 data/processed/
 configs/data.yaml
 *.pt
+!models/best.pt
 outputs/
 runs/
 .env
