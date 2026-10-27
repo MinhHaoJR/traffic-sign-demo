@@ -1,0 +1,12 @@
+# Cấu hình dữ liệu YOLO (mẫu đưa lên Git)
+path: data/processed
+train: images/train
+val: images/val
+test: images/test
+
+nc: 4
+names:
+  0: Cấm đỗ xe
+  1: Cấm dừng và đỗ xe
+  2: Cấm rẽ trái
+  3: Cấm rẽ phải
