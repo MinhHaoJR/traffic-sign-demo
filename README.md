@@ -245,3 +245,33 @@ def predict_image(model, image_path: str, confidence: float = 0.25):
 - [ ] **L1 - L6:** Hào hoàn thành huấn luyện `best.pt`, xuất `predict.py` và bảng điểm `test_metrics.csv`.
 - [ ] **H1 - H6:** Hảo hoàn thiện giao diện Tkinter gọi `predict_image`, kiểm thử và đóng gói.
 - [ ] **Đ1 - Đ6:** Đạt hoàn thiện bản báo cáo Word/PDF và slide thuyết trình.
+
+---
+
+## 7. CHẠY GIAO DIỆN TKINTER CỦA HẢO
+
+### Cài đặt và khởi chạy
+
+Mở PowerShell ở thư mục dự án. Nếu chưa có môi trường ảo, tạo một lần rồi cài các thư viện:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe app.py
+```
+
+Nếu `.venv` đã tồn tại, bỏ qua lệnh tạo môi trường. Ứng dụng dùng trọng số tại
+`models/best.pt`; nếu thiếu model hoặc thư viện YOLO, vẫn mở được giao diện xem ảnh,
+còn nút **Nhận diện** sẽ không hoạt động.
+
+### Sử dụng
+
+1. Chọn ảnh JPG/JPEG/PNG. Ảnh được giữ đúng tỷ lệ; ảnh PNG trong suốt hiển thị trên nền trắng.
+2. Điều chỉnh ngưỡng confidence rồi bấm **Nhận diện**. Có thể tiếp tục thao tác giao diện trong lúc model xử lý.
+3. Xem ảnh có khung và tên lớp, confidence cùng tọa độ bounding box trong bảng kết quả.
+4. Bấm **Lưu kết quả** để chọn nơi lưu ảnh JPG hoặc PNG. Mặc định tên file là `<tên_ảnh>_ket_qua.jpg`.
+5. Khi đổi/xóa ảnh hoặc đổi ngưỡng confidence, kết quả trước đó bị xóa để tránh gắn nhầm với đầu vào mới.
+
+Model được nạp một lần khi mở ứng dụng. `app.py` gọi `load_model` và `predict_image`
+trong `src/predict.py`; suy luận chạy trên worker thread và chỉ cập nhật widget ở luồng Tkinter.
+Các bước cần kiểm tra trước buổi demo nằm trong [`docs/demo_checklist.md`](docs/demo_checklist.md).
