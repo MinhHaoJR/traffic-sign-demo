@@ -1,5 +1,5 @@
 """
-[Hào] Huấn luyện YOLO11 cho 4 lớp biển báo cấm.
+[Hào] Huấn luyện YOLO11 cho các lớp biển báo trong configs/classes.json.
 
 Chạy thử nhanh (3 epoch):   python -m src.train
 Huấn luyện đầy đủ:          python -m src.train --epochs 30 --name run_30ep --save-model
@@ -54,7 +54,7 @@ def append_log(row: dict) -> None:
 
 
 def main():
-    p = argparse.ArgumentParser(description="Huấn luyện YOLO cho 4 lớp biển báo.")
+    p = argparse.ArgumentParser(description="Huấn luyện YOLO cho biển báo.")
     p.add_argument("--model", default="yolo11n.pt", help="Trọng số khởi đầu")
     p.add_argument("--epochs", type=int, default=3)
     p.add_argument("--imgsz", type=int, default=416)
@@ -62,6 +62,8 @@ def main():
     p.add_argument("--device", default="cpu", help="cpu hoặc 0 (GPU NVIDIA)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--cache", choices=["ram", "disk"], default=None,
+                   help="Giữ ảnh đã giải mã để nạp nhanh hơn (cần --workers 0 trên máy ít RAM)")
     p.add_argument("--name", default="traffic_sign_yolo11")
     p.add_argument("--save-model", action="store_true",
                    help="Chép best.pt của lần chạy này vào models/best.pt")
@@ -84,7 +86,7 @@ def main():
         device=device,
         workers=a.workers,
         seed=a.seed,
-        cache=False,
+        cache=a.cache or False,
         fliplr=0.0,  # không lật ngang: sẽ đảo nghĩa biển rẽ trái/rẽ phải
         flipud=0.0,
         project=str(TRAINING_OUTPUT_DIR),

@@ -56,6 +56,20 @@ Các ca UI ở trên được chạy bằng script điều khiển `TrafficSignA
 - `load_model` được gọi đúng 1 lần trong toàn bộ phiên; `model.names` khớp `configs/classes.json`.
 - Ghi chú môi trường: lần suy luận đầu, Ultralytics tự cài gói `pi-heif` vào `.venv` (cần internet). Gói này không có trong `requirements.txt`.
 
+### Đợt kiểm thử 2026-11-06 (bản 11 lớp + video)
+
+Model `run_11lop_50ep`. Kiểm định dữ liệu gộp: 3.855 ảnh, 5.328 khung, 0 nhãn hỏng, 0 cặp ảnh/nhãn lệch.
+
+Luồng video trong app được kiểm bằng script điều khiển `TrafficSignApp` thật với model giả (trả 1 khung ở khung chẵn); hộp thoại được giả lập. Kết quả 13/13 đạt:
+
+- Nút Chọn video chỉ bật khi model sẵn sàng; hủy hộp thoại chọn/lưu thì không chạy gì; chặn ghi đè chính video gốc.
+- Khi đang chạy: khóa Chọn ảnh, Nhận diện, Lưu, Xóa, Chọn video và thanh ngưỡng; chỉ bật Dừng video. Khung và bảng kết quả cập nhật trực tiếp.
+- Video 100 khung 960×540 lưu ra đường dẫn có dấu `kết quả có dấu/video kết quả.mp4`: đủ 100 khung, cùng kích thước, mở lại được. Trạng thái báo đúng số khung và lớp xuất hiện.
+- Khoảng lặng event loop lớn nhất 159 ms (không đơ).
+- Dừng giữa chừng: lưu 15/100 khung, file mở được. Video hỏng báo lỗi, nút mở lại. Luồng ảnh vẫn chạy sau video. Đóng app khi đang chạy đặt cờ dừng.
+
+Với model thật, `python -m src.predict_video` trên video thử 100 khung (ghép từ khung test của dataset 3): 9,7 s (10,3 khung/s, GPU), 69 khung có biển, lớp xuất hiện Cấm rẽ trái, Cấm rẽ trái và quay đầu, Cấm đỗ xe, Cấm dừng và đỗ xe. Luồng video trong app với model thật (chỉ giả lập hộp thoại): 100/100 khung, 19,1 khung/s, cùng số khung mỗi lớp như dòng lệnh, khoảng lặng event loop lớn nhất 99 ms, không có hộp thoại lỗi. Chưa thử bằng tay trên màn hình.
+
 ## Nhật ký lỗi
 
 | Ngày | Bước tái hiện | Lỗi quan sát được | Cách sửa | Kết quả kiểm tra lại |

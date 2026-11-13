@@ -1,0 +1,18 @@
+split,class_id,class_name,num_objects
+train,0,Cấm đỗ xe,149
+train,1,Cấm dừng và đỗ xe,126
+train,2,Cấm rẽ trái,133
+train,3,Cấm rẽ phải,152
+val,0,Cấm đỗ xe,14
+val,1,Cấm dừng và đỗ xe,54
+val,2,Cấm rẽ trái,29
+val,3,Cấm rẽ phải,23
+test,0,Cấm đỗ xe,37
+test,1,Cấm dừng và đỗ xe,20
+test,2,Cấm rẽ trái,38
+test,3,Cấm rẽ phải,25
+
+split,unique_images,total_objects
+train,560,560
+val,120,120
+test,120,120
