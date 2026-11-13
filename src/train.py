@@ -67,6 +67,8 @@ def main():
     p.add_argument("--name", default="traffic_sign_yolo11")
     p.add_argument("--save-model", action="store_true",
                    help="Chép best.pt của lần chạy này vào models/best.pt")
+    p.add_argument("--resume", action="store_true",
+                   help="Chạy tiếp lần train --name bị ngắt từ last.pt (giữ nguyên tham số cũ)")
     a = p.parse_args()
 
     import torch
@@ -77,22 +79,25 @@ def main():
     device = int(a.device) if a.device.isdigit() else a.device
 
     start = time.time()
-    model = YOLO(a.model)
-    results = model.train(
-        data=str(data_yaml),
-        epochs=a.epochs,
-        imgsz=a.imgsz,
-        batch=a.batch,
-        device=device,
-        workers=a.workers,
-        seed=a.seed,
-        cache=a.cache or False,
-        fliplr=0.0,  # không lật ngang: sẽ đảo nghĩa biển rẽ trái/rẽ phải
-        flipud=0.0,
-        project=str(TRAINING_OUTPUT_DIR),
-        name=a.name,
-        exist_ok=True,
-    )
+    if a.resume:
+        # train_time_min trong nhật ký chỉ tính phần chạy tiếp
+        results = YOLO(TRAINING_OUTPUT_DIR / a.name / "weights" / "last.pt").train(resume=True)
+    else:
+        results = YOLO(a.model).train(
+            data=str(data_yaml),
+            epochs=a.epochs,
+            imgsz=a.imgsz,
+            batch=a.batch,
+            device=device,
+            workers=a.workers,
+            seed=a.seed,
+            cache=a.cache or False,
+            fliplr=0.0,  # không lật ngang: sẽ đảo nghĩa biển rẽ trái/rẽ phải
+            flipud=0.0,
+            project=str(TRAINING_OUTPUT_DIR),
+            name=a.name,
+            exist_ok=True,
+        )
     minutes = (time.time() - start) / 60
 
     best = Path(results.save_dir) / "weights" / "best.pt"

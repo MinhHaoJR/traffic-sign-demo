@@ -70,6 +70,12 @@ Luồng video trong app được kiểm bằng script điều khiển `TrafficSi
 
 Với model thật, `python -m src.predict_video` trên video thử 100 khung (ghép từ khung test của dataset 3): 9,7 s (10,3 khung/s, GPU), 69 khung có biển, lớp xuất hiện Cấm rẽ trái, Cấm rẽ trái và quay đầu, Cấm đỗ xe, Cấm dừng và đỗ xe. Luồng video trong app với model thật (chỉ giả lập hộp thoại): 100/100 khung, 19,1 khung/s, cùng số khung mỗi lớp như dòng lệnh, khoảng lặng event loop lớn nhất 99 ms, không có hộp thoại lỗi. Chưa thử bằng tay trên màn hình.
 
+### Đợt kiểm thử 2026-11-13 (bản 28 lớp)
+
+Model `run_28lop_50ep`. Kiểm định dữ liệu gộp: 7.886 ảnh, 12.960 khung, 0 nhãn hỏng, 0 cặp ảnh/nhãn lệch. Test mAP@0.5 0,867 (1.210 ảnh).
+
+`python -m src.predict_video` trên video thử 142 khung (ghép 6 cụm khung test của ds3 có nhiều lớp mới): 7,7 s (18,5 khung/s, GPU), 139 khung có biển, 18 lớp xuất hiện. Có nhận nhầm giữa các biển tam giác cảnh báo. Luồng video trong app chưa chạy lại với model 28 lớp (code app không đổi ngoài dòng mô tả).
+
 ## Nhật ký lỗi
 
 | Ngày | Bước tái hiện | Lỗi quan sát được | Cách sửa | Kết quả kiểm tra lại |

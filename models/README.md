@@ -1,46 +1,63 @@
 # Hướng dẫn model (Hào – L6)
 
-`models/best.pt` là trọng số YOLO11n đã fine-tune cho **11 lớp biển báo cấm** (bản mở rộng, gộp 3 dataset). Bản 4 lớp cũ được giữ ở `models/best_4lop.pt`, số liệu cũ ở `docs/v1_4lop/`. Cả hai file (~5,5 MB) **được commit thẳng vào repo** nhờ ngoại lệ `!models/best.pt`, `!models/best_4lop.pt` trong `.gitignore`.
+`models/best.pt` là trọng số YOLO11n đã fine-tune cho **28 lớp biển báo** (biển cấm, giới hạn tốc độ, nguy hiểm, hiệu lệnh, chỉ dẫn; gộp 3 dataset). Bản 4 lớp cũ được giữ ở `models/best_4lop.pt`, số liệu cũ ở `docs/v1_4lop/` (4 lớp) và `docs/v2_11lop/` (11 lớp). Cả hai file (~5,5 MB) **được commit thẳng vào repo** nhờ ngoại lệ `!models/best.pt`, `!models/best_4lop.pt` trong `.gitignore`.
 
 - **Vị trí đặt file:** `models/best.pt` (đường dẫn `MODEL_PATH` trong `src/paths.py`).
 - Khi train lại và chọn model mới, ghi đè file này rồi commit lại; ghi rõ lần chạy trong commit.
 
-## 11 lớp hỗ trợ
+## 28 lớp hỗ trợ
 
-ID 0–3 giữ nguyên như bản 4 lớp, nên `best_4lop.pt` vẫn hiển thị đúng tên lớp.
+ID 0–3 giữ nguyên như bản 4 lớp, ID 0–10 giữ nguyên như bản 11 lớp.
 
-| ID | Tên lớp |
-| :-: | :-- |
-| 0 | Cấm đỗ xe |
-| 1 | Cấm dừng và đỗ xe |
-| 2 | Cấm rẽ trái |
-| 3 | Cấm rẽ phải |
-| 4 | Cấm đi ngược chiều |
-| 5 | Cấm quay đầu |
-| 6 | Cấm rẽ trái và quay đầu |
-| 7 | Cấm ô tô khách và ô tô tải |
-| 8 | Cấm xe hai và ba bánh |
-| 9 | Cấm mô tô và xe máy |
-| 10 | Dừng lại |
+| ID | Tên lớp | Nguồn |
+| :-: | :-- | :-- |
+| 0 | Cấm đỗ xe | ds1/ds2/ds3 |
+| 1 | Cấm dừng và đỗ xe | ds1/ds2/ds3 |
+| 2 | Cấm rẽ trái | ds1/ds2/ds3 |
+| 3 | Cấm rẽ phải | ds1/ds2/ds3 |
+| 4 | Cấm đi ngược chiều | ds1/ds2/ds3 |
+| 5 | Cấm quay đầu | ds1/ds2/ds3 |
+| 6 | Cấm rẽ trái và quay đầu | ds1/ds2/ds3 |
+| 7 | Cấm ô tô khách và ô tô tải | ds1/ds2/ds3 |
+| 8 | Cấm xe hai và ba bánh | ds1/ds2/ds3 |
+| 9 | Cấm mô tô và xe máy | ds1/ds2/ds3 |
+| 10 | Dừng lại | ds1/ds2/ds3 |
+| 11 | Phải đi vòng sang bên phải | ds3 |
+| 12 | Đi chậm | ds3 + ds2 |
+| 13 | Giới hạn tốc độ 60 km/h | ds3 |
+| 14 | Đường người đi bộ cắt ngang | ds3 |
+| 15 | Giới hạn tốc độ 40 km/h | ds3 |
+| 16 | Giao nhau với đường không ưu tiên | ds3 |
+| 17 | Biển gộp làn đường theo phương tiện | ds3 + ds2 |
+| 18 | Bến xe buýt | ds3 |
+| 19 | Giới hạn tốc độ 80 km/h | ds3 |
+| 20 | Đường một chiều | ds3 |
+| 21 | Chỗ ngoặt nguy hiểm vòng bên trái | ds3 |
+| 22 | Cấm ô tô | ds1 + ds3 |
+| 23 | Cấm ô tô rẽ trái | ds1 |
+| 24 | Hướng đi phải theo: rẽ phải | ds1 |
+| 25 | Hướng đi phải theo: rẽ trái | ds1 |
+| 26 | Trẻ em | ds1 + ds3 |
+| 27 | Giao nhau với đường ưu tiên | ds1 |
 
-Model chỉ nhận diện 11 lớp này, không phải mọi biển báo. "Cấm ô tô" và "Cấm xe tải" bị bỏ vì sau khi lọc chỉ còn 52 và 85 đối tượng sạch.
+Model chỉ nhận diện 28 lớp này, không phải mọi biển báo. Các lớp 11–21 là biển của ds3 xuất hiện trong ít nhất 13 cụm 25 khung khác nhau; các lớp 22–27 lấy từ ds1 sau khi xem ảnh cắt (bỏ các lớp ds1 lẫn nhiều kiểu biển).
 
 ## Cấu hình / phiên bản model
 
-Lần chạy được chọn: `run_11lop_50ep` (dòng tương ứng trong `docs/experiment_log.csv`).
+Lần chạy được chọn: `run_28lop_50ep` (dòng tương ứng trong `docs/experiment_log.csv`).
 
 | Mục | Giá trị |
 | :-- | :-- |
 | Trọng số khởi đầu | `yolo11n.pt` (fine-tune) |
 | epochs / imgsz / batch | 50 / 640 / 16 |
 | Thiết bị / seed | GPU RTX 4050 Laptop 6 GB / 42 |
-| workers / cache | 0 / ram (tránh lỗi WinError 1455 thiếu bộ nhớ ảo trên Windows) |
+| workers / cache | 0 / disk (tránh lỗi WinError 1455 thiếu bộ nhớ ảo trên Windows) |
 | `fliplr` / `flipud` | 0.0 / 0.0 |
-| Thời gian huấn luyện | 125,2 phút |
+| Thời gian huấn luyện | khoảng 135 phút (bị ngắt ở epoch 8, chạy tiếp bằng `--resume`; nhật ký chỉ ghi 112,3 phút phần chạy tiếp) |
 | Thư viện | ultralytics 8.4.191, torch 2.14.1+cu126, Python 3.14 |
-| Điểm trên tập **val** (581 ảnh, 825 đối tượng) | Precision 0,898 · Recall 0,746 · mAP@0.5 0,798 · mAP@0.5:0.95 0,615 |
+| Điểm trên tập **val** (1.273 ảnh, 1.958 đối tượng) | Precision 0,903 · Recall 0,871 · mAP@0.5 0,912 · mAP@0.5:0.95 0,723 |
 
-Dữ liệu: 3.855 ảnh gộp từ 3 dataset bằng `python -m src.prepare_merged` (2.657 train / 581 val / 617 test), chia theo cụm 25 khung liên tiếp để khung video gần giống nhau không rơi vào cả train và test. Chi tiết ở `docs/data_summary.csv`, `docs/split_manifest.csv` và mục 8 của `README.md`.
+Dữ liệu: 7.886 ảnh gộp từ 3 dataset bằng `python -m src.prepare_merged` (5.403 train / 1.273 val / 1.210 test), chia theo cụm 25 khung liên tiếp để khung video gần giống nhau không rơi vào cả train và test. Chi tiết ở `docs/data_summary.csv`, `docs/split_manifest.csv` và mục 8 của `README.md`.
 
 ## Huấn luyện (chỉ cần một máy)
 
@@ -83,32 +100,50 @@ Ghi `docs/test_metrics.csv` (Precision, Recall, mAP@0.5, mAP@0.5:0.95 toàn bộ
 
 ## Kết quả
 
-Đánh giá một lần trên tập **test** (617 ảnh, 825 đối tượng) bằng `python -m src.evaluate --imgsz 640 --device 0 --examples`. Nguồn: `docs/test_metrics.csv`.
+Đánh giá một lần trên tập **test** (1.210 ảnh, 2041 đối tượng) bằng `python -m src.evaluate --imgsz 640 --device 0 --examples`. Nguồn: `docs/test_metrics.csv`.
 
 | Lớp | Số đối tượng | Precision | Recall | mAP@0.5 | mAP@0.5:0.95 |
 | :-- | :-: | :-: | :-: | :-: | :-: |
-| **Tất cả** | 825 | 0,867 | 0,756 | 0,793 | 0,621 |
-| Cấm đỗ xe | 98 | 0,866 | 0,793 | 0,880 | 0,653 |
-| Cấm dừng và đỗ xe | 165 | 0,939 | 0,752 | 0,906 | 0,650 |
-| Cấm rẽ trái | 101 | 0,946 | 0,842 | 0,937 | 0,826 |
-| Cấm rẽ phải | 115 | 0,999 | 1,000 | 0,995 | 0,815 |
-| Cấm đi ngược chiều | 103 | 0,977 | 0,841 | 0,882 | 0,579 |
-| Cấm quay đầu | 10 | 0,866 | 0,300 | 0,327 | 0,276 |
-| Cấm rẽ trái và quay đầu | 33 | 0,994 | 0,879 | 0,903 | 0,633 |
-| Cấm ô tô khách và ô tô tải | 46 | 0,000 | 0,000 | 0,002 | 0,001 |
-| Cấm xe hai và ba bánh | 68 | 0,995 | 1,000 | 0,995 | 0,884 |
-| Cấm mô tô và xe máy | 11 | 0,958 | 0,909 | 0,905 | 0,588 |
-| Dừng lại | 75 | 0,995 | 1,000 | 0,995 | 0,928 |
+| **Tất cả** | 2041 | 0,882 | 0,812 | 0,867 | 0,689 |
+| 0. Cấm đỗ xe | 206 | 0,977 | 0,819 | 0,929 | 0,767 |
+| 1. Cấm dừng và đỗ xe | 184 | 0,836 | 0,891 | 0,855 | 0,661 |
+| 2. Cấm rẽ trái | 119 | 0,933 | 0,874 | 0,910 | 0,837 |
+| 3. Cấm rẽ phải | 103 | 0,963 | 0,942 | 0,985 | 0,861 |
+| 4. Cấm đi ngược chiều | 106 | 0,917 | 0,689 | 0,795 | 0,489 |
+| 5. Cấm quay đầu | 13 | 1,000 | 0,804 | 0,928 | 0,670 |
+| 6. Cấm rẽ trái và quay đầu | 50 | 0,990 | 1,000 | 0,995 | 0,658 |
+| 7. Cấm ô tô khách và ô tô tải | 48 | 0,895 | 0,458 | 0,619 | 0,364 |
+| 8. Cấm xe hai và ba bánh | 117 | 0,833 | 0,914 | 0,942 | 0,758 |
+| 9. Cấm mô tô và xe máy | 3 | 0,514 | 0,667 | 0,775 | 0,686 |
+| 10. Dừng lại | 66 | 0,991 | 1,000 | 0,995 | 0,899 |
+| 11. Phải đi vòng sang bên phải | 58 | 0,891 | 0,707 | 0,786 | 0,478 |
+| 12. Đi chậm | 35 | 0,552 | 0,740 | 0,766 | 0,603 |
+| 13. Giới hạn tốc độ 60 km/h | 96 | 0,794 | 0,750 | 0,768 | 0,541 |
+| 14. Đường người đi bộ cắt ngang | 37 | 0,948 | 1,000 | 0,982 | 0,728 |
+| 15. Giới hạn tốc độ 40 km/h | 38 | 1,000 | 0,732 | 0,941 | 0,803 |
+| 16. Giao nhau với đường không ưu tiên | 34 | 0,960 | 0,703 | 0,881 | 0,705 |
+| 17. Biển gộp làn đường theo phương tiện | 57 | 0,944 | 0,754 | 0,798 | 0,653 |
+| 18. Bến xe buýt | 20 | 0,949 | 0,937 | 0,969 | 0,726 |
+| 19. Giới hạn tốc độ 80 km/h | 29 | 0,620 | 0,517 | 0,637 | 0,449 |
+| 20. Đường một chiều | 31 | 0,750 | 0,226 | 0,324 | 0,170 |
+| 21. Chỗ ngoặt nguy hiểm vòng bên trái | 20 | 0,599 | 0,750 | 0,802 | 0,568 |
+| 22. Cấm ô tô | 112 | 0,994 | 1,000 | 0,995 | 0,967 |
+| 23. Cấm ô tô rẽ trái | 25 | 0,976 | 1,000 | 0,995 | 0,938 |
+| 24. Hướng đi phải theo: rẽ phải | 100 | 0,909 | 0,900 | 0,924 | 0,827 |
+| 25. Hướng đi phải theo: rẽ trái | 100 | 0,994 | 1,000 | 0,995 | 0,913 |
+| 26. Trẻ em | 113 | 0,995 | 1,000 | 0,995 | 0,860 |
+| 27. Giao nhau với đường ưu tiên | 121 | 0,983 | 0,963 | 0,985 | 0,713 |
 
-Ảnh ví dụ (ngưỡng 0,25): 518 ảnh đúng, 56 ảnh sai, 43 ảnh bỏ sót, trong `outputs/predictions/examples/`.
+Ảnh ví dụ (ngưỡng 0,25): 949 ảnh đúng, 157 ảnh sai, 104 ảnh bỏ sót, trong `outputs/predictions/examples/`.
 
-Không so trực tiếp với bản 4 lớp (mAP@0.5 0,995): tập test mới lớn hơn, nhiều biển nhỏ ở xa, và tách theo cụm khung nên khó hơn nhiều.
+Không so trực tiếp với bản 11 lớp (test mAP@0.5 0,793) hay 4 lớp (0,995): mỗi bản có tập test khác nhau.
 
 ## Giới hạn (cần nêu trong báo cáo)
 
-- **"Cấm ô tô khách và ô tô tải" gần như không nhận được trên test.** Toàn bộ ảnh lớp này đến từ một dataset (dạng video), train chỉ có vài biển thật lặp lại qua nhiều khung; biển trong test là biển khác, nhỏ và mờ. Model nhận đúng trên train nhưng ở test gán nhầm sang "Cấm đỗ xe"/"Cấm dừng và đỗ xe". Cần thêm ảnh của nhiều biển khác nhau.
-- **Lớp ít mẫu, số liệu không ổn định:** "Cấm quay đầu" chỉ có 10 đối tượng test, "Cấm mô tô và xe máy" 11, "Cấm rẽ trái và quay đầu" 33. Một vài ảnh đúng/sai làm điểm thay đổi lớn.
-- **Có thể thiếu nhãn khi gộp:** mỗi dataset chỉ gán nhãn các lớp của nó; một ảnh có thể chứa biển thuộc lớp khác mà không được gán nhãn. Ảnh chứa nhãn mơ hồ đã bị loại, nhưng chưa rà soát hết.
-- **Biển nhỏ ở xa vẫn dễ bị bỏ sót** (recall toàn bộ 0,756).
+- **Lớp yếu nhất:** "Đường một chiều" (recall 0,23), "Cấm ô tô khách và ô tô tải" (0,46), "Giới hạn tốc độ 80 km/h" (0,52). Các lớp này lấy từ ds3 (dạng video) nên train chỉ có ít biển thật lặp lại qua nhiều khung; biển trong test là biển khác.
+- **Lớp ít mẫu, số liệu không ổn định:** "Cấm mô tô và xe máy" chỉ có 3 đối tượng test, "Cấm quay đầu" 13. Một vài ảnh đúng/sai làm điểm thay đổi lớn.
+- **Lớp lấy từ ds1 có điểm rất cao (0,92–0,995)** một phần vì ảnh ds1 thường là biển to, rõ; chưa chắc giữ được mức này trên ảnh đường phố thực.
+- **Có thể thiếu nhãn khi gộp:** mỗi dataset chỉ gán nhãn các lớp của nó (ví dụ khung ds3 có biển "rẽ phải" xanh mà ds3 không có lớp này). Ảnh có nhãn mơ hồ đã bị loại, nhưng chưa rà soát hết.
+- **Nhầm giữa các biển tam giác cảnh báo:** trên video thử, biển "Giao nhau với đường không ưu tiên" bị gán thành "Chỗ ngoặt nguy hiểm vòng bên trái" (0,88).
 - Chỉ huấn luyện một lần với seed 42; chưa biết độ dao động giữa các lần chạy.
-- Video: suy luận từng khung độc lập (không theo dõi đối tượng), khoảng 10 khung/s trên GPU với video 960×540; nhãn có thể chập chờn giữa các khung.
+- Video: suy luận từng khung độc lập (không theo dõi đối tượng), khoảng 18 khung/s trên GPU với video 960×540; nhãn có thể chập chờn giữa các khung.

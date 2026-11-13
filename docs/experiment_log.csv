@@ -2,3 +2,4 @@
 smoke_3ep,2026-10-28 00:35,yolo11n.pt,416,3,4,cpu,42,6.6,0.9163,0.8578,0.9248,0.6691,8.4.190,2.14.1+cpu,outputs/training/smoke_3ep/weights/best.pt
 run_30ep,2026-10-28 01:41,yolo11n.pt,416,30,4,cpu,42,65.4,0.9815,0.9985,0.9949,0.8073,8.4.190,2.14.1+cpu,outputs/training/run_30ep/weights/best.pt
 run_11lop_50ep,2026-11-06 22:38,yolo11n.pt,640,50,16,0,42,125.2,0.8978,0.7463,0.7977,0.6149,8.4.191,2.14.1+cu126,outputs/training/run_11lop_50ep/weights/best.pt
+run_28lop_50ep,2026-11-13 23:02,yolo11n.pt,640,50,16,0,42,112.3,0.9034,0.8715,0.9121,0.7234,8.4.191,2.14.1+cu126,outputs/training/run_28lop_50ep/weights/best.pt
