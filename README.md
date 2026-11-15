@@ -1,319 +1,183 @@
 # DỰ ÁN NHẬN DIỆN BIỂN BÁO GIAO THÔNG VIỆT NAM (TRAFFIC SIGN DEMO)
-Ứng dụng nhận diện biển báo giao thông bằng mạng nơ-ron tích chập (YOLO) và giao diện trực quan Tkinter trên Python.
+
+Ứng dụng nhận diện biển báo giao thông Việt Nam trên **ảnh và video** bằng YOLO11n, có giao diện Tkinter.
 
 ---
 
-## 1. TỔNG QUAN DỰ ÁN
+## 1. TỔNG QUAN
 
-* **Mục tiêu:** Xây dựng ứng dụng demo hoàn chỉnh cho phép chọn ảnh từ máy tính, tự động phát hiện vị trí, vẽ khung (bounding box) và phân loại 4 loại biển báo cấm phổ biến tại Việt Nam cùng độ tin cậy (*Confidence*).
-* **Phạm vi 4 lớp biển báo lựa chọn:**
-  * **ID 0:** `Cấm đỗ xe` *(Biển tròn viền đỏ, nền xanh, 1 vạch chéo đỏ)*
-  * **ID 1:** `Cấm dừng và đỗ xe` *(Biển tròn viền đỏ, nền xanh, 2 vạch chéo đỏ)*
-  * **ID 2:** `Cấm rẽ trái` *(Biển tròn viền đỏ, mũi tên rẽ trái bị gạch chéo)*
-  * **ID 3:** `Cấm rẽ phải` *(Biển tròn viền đỏ, mũi tên rẽ phải bị gạch chéo)*
-* **Bản mở rộng (mục 8):** dữ liệu và cấu hình đã ở **28 lớp**, nhưng lần train 28 lớp (`run_28lop_50ep`) dừng ở epoch 8/50 (mAP@0.5 val 0,866 tại epoch 7) nên `models/best.pt` vẫn là model **11 lớp** (ID 0–10; số liệu ở `docs/v2_11lop/` và `models/README.md`). 28 lớp gồm biển cấm, giới hạn tốc độ, biển nguy hiểm, hiệu lệnh, chỉ dẫn, gộp từ 3 bộ dữ liệu (ID 0–3 giữ nguyên như trên). App và dòng lệnh nhận diện được cả **video**. Model 4 lớp ban đầu được giữ ở `models/best_4lop.pt`, số liệu cũ ở `docs/v1_4lop/`; số liệu bản 11 lớp ở `docs/v2_11lop/`.
-* **Nhóm thực hiện & Phân công vai trò:**
-  * **Tâm:** Phụ trách Dữ liệu, Kiểm định nhãn & Thực nghiệm Xử lý ảnh OpenCV.
-  * **Hào:** Phụ trách Huấn luyện mô hình YOLO, Đánh giá chỉ số & Viết hàm nhận diện.
-  * **Hảo:** Phụ trách Xây dựng giao diện Tkinter, Tích hợp mô hình & Quản lý Git.
-  * **Đạt:** Phụ trách Thu thập tư liệu, Soạn thảo Báo cáo đồ án (Word/PDF) & Slide thuyết trình.
+* **Chức năng:** chọn ảnh hoặc video, phát hiện vị trí biển báo, vẽ khung (bounding box), ghi tên lớp và độ tin cậy (*confidence*), lưu kết quả ra JPG/PNG hoặc MP4.
+* **Phạm vi:** **28 loại biển báo** gồm biển cấm, giới hạn tốc độ, biển nguy hiểm, hiệu lệnh và chỉ dẫn (danh sách ở [mục 4](#4-28-lớp-biển-báo)).
+* **Dữ liệu:** gộp 3 bộ dữ liệu công khai thành 7.886 ảnh, 12.960 biển (chi tiết ở [mục 5](#5-dữ-liệu)).
+* **Kết quả trên tập test** (1.210 ảnh, 2.041 biển): Precision 0,882 · Recall 0,812 · **mAP@0.5 0,867** · mAP@0.5:0.95 0,689.
+* **Các phiên bản model:**
+
+  | Bản | Số lớp | Trọng số | Số liệu |
+  | --- | :-: | --- | --- |
+  | Hiện tại | 28 | `models/best.pt` | `docs/test_metrics.csv`, [`models/README.md`](models/README.md) |
+  | Bản 2 | 11 biển cấm | không lưu trong repo | `docs/v2_11lop/` |
+  | Bản 1 | 4 biển cấm | `models/best_4lop.pt` | `docs/v1_4lop/` |
+
+  ID 0–3 giống nhau ở cả 3 bản, ID 0–10 giống nhau ở bản 2 và bản hiện tại.
+
+* **Nhóm thực hiện:**
+  * **Tâm:** dữ liệu, kiểm định nhãn, thực nghiệm xử lý ảnh OpenCV.
+  * **Hào:** huấn luyện YOLO, đánh giá, hàm nhận diện.
+  * **Hảo:** giao diện Tkinter, tích hợp model, quản lý Git.
+  * **Đạt:** tư liệu, báo cáo đồ án (Word/PDF), slide thuyết trình.
 
 ---
 
-## 2. CẤU TRÚC THƯ MỤC DỰ ÁN
+## 2. CẤU TRÚC THƯ MỤC
 
 ```text
-D:\thiet_ke\X_L_A\traffic-sign-demo\
-├── app.py                           # [Hảo] Ứng dụng giao diện Tkinter chính
-├── requirements.txt                 # [Hảo] Danh sách thư viện cần cài đặt
-├── README.md                        # Tài liệu hướng dẫn chung và bàn giao toàn dự án
-├── .gitignore                       # Danh sách các file/thư mục không đưa lên Git
-│
+traffic-sign-demo/
+├── app.py                      # Giao diện Tkinter (ảnh + video)
+├── requirements.txt
 ├── configs/
-│   ├── classes.json                 # [Tâm] Bảng mã ID và tên 4 loại biển báo
-│   ├── data.yaml                    # [Tâm] Cấu hình huấn luyện YOLO trên máy cục bộ
-│   └── data.example.yaml            # [Tâm] Cấu hình mẫu đưa lên Git
-│
+│   ├── classes.json            # Bảng ID -> tên 28 lớp
+│   ├── data.example.yaml       # Cấu hình dữ liệu YOLO mẫu (đưa lên Git)
+│   └── data.yaml               # Sinh tự động trên từng máy (không đưa lên Git)
 ├── src/
-│   ├── __init__.py                  # Package init
-│   ├── paths.py                     # [Tâm / Hảo] Quản lý đường dẫn chung bằng pathlib.Path
-│   ├── prepare_data.py              # [Tâm] Tiền xử lý, lọc trùng và chia tập dữ liệu
-│   ├── check_and_visualize.py       # [Tâm] Kiểm định 100% dữ liệu và vẽ nhãn trực quan
-│   ├── preprocess.py                # [Tâm] Thực nghiệm tiền xử lý ảnh số bằng OpenCV
-│   ├── train.py                     # [Hào] Huấn luyện mô hình YOLO11
-│   ├── predict.py                   # [Hào] Hàm nhận diện cho giao diện Tkinter gọi
-│   └── evaluate.py                  # [Hào] Đánh giá mô hình trên tập Test
-│
-├── data/
-│   ├── README.md                    # [Tâm] Tài liệu quản lý dữ liệu chi tiết
-│   ├── raw/                         # Dữ liệu gốc liên kết (10.691 ảnh - không commit)
-│   └── processed/                   # [Tâm BÀN GIAO CHO HÀO] Bộ dữ liệu sạch 800 ảnh
-│       ├── images/{train,val,test}  # 560 train - 120 val - 120 test
-│       └── labels/{train,val,test}  # File nhãn YOLO tương ứng
-│
+│   ├── paths.py                # Đường dẫn dùng chung
+│   ├── prepare_merged.py       # Gộp 3 bộ dữ liệu thành bộ 28 lớp
+│   ├── prepare_data.py         # Chuẩn bị bộ 4 lớp ban đầu (bản 1)
+│   ├── check_and_visualize.py  # Kiểm định nhãn, vẽ ảnh lưới tổng quan
+│   ├── preprocess.py           # Thực nghiệm xử lý ảnh OpenCV
+│   ├── train.py                # Huấn luyện YOLO, ghi docs/experiment_log.csv
+│   ├── evaluate.py             # Đánh giá trên tập test, ghi docs/test_metrics.csv
+│   ├── predict.py              # Nhận diện ảnh: load_model, predict_image, predict_frame
+│   └── predict_video.py        # Nhận diện video, ghi MP4
 ├── models/
-│   ├── README.md                    # [Hào] Hướng dẫn tải trọng số và vị trí lưu
-│   └── best.pt                      # [Hào BÀN GIAO CHO HẢO] Trọng số mô hình sau huấn luyện
-│
-├── outputs/
-│   ├── label_verification/          # [Tâm BÀN GIAO CHO ĐẠT] Ảnh vẽ bounding box trực quan
-│   │   ├── verification_overview_grid.jpg  # Ảnh lưới 12 ô tổng quan 4 lớp x 3 tập
-│   │   └── t4_verification_report.json     # Báo cáo kiểm định định lượng 100% dữ liệu
-│   ├── preprocessing/               # [Tâm BÀN GIAO CHO ĐẠT] Ảnh thực nghiệm OpenCV
-│   │   ├── opencv_experiment_report.md     # Báo cáo lý thuyết & so sánh OpenCV vs YOLO
-│   │   └── case_1_bright_light/ ...        # 5 ca thử nghiệm thực tế (7 ảnh/ca + collage)
-│   ├── training/                    # [Hào BÀN GIAO CHO ĐẠT] Log, biểu đồ loss/mAP
-│   └── predictions/                 # [Hảo] Thư mục lưu ảnh nhận diện từ giao diện
-│
+│   ├── best.pt                 # Model 28 lớp (được commit)
+│   ├── best_4lop.pt            # Model 4 lớp ban đầu
+│   └── README.md               # Cấu hình train, kết quả từng lớp, giới hạn
+├── data/                       # Dữ liệu gốc và data/processed (không đưa lên Git)
+├── outputs/                    # Log train, ảnh kiểm định, ảnh/video dự đoán (không đưa lên Git)
 └── docs/
-    ├── report_outline.md            # [Đạt] Dàn ý chi tiết bài báo cáo
-    ├── data_summary.csv             # [Tâm BÀN GIAO CHO ĐẠT] Thống kê số lượng ảnh/đối tượng
-    ├── split_manifest.csv           # [Tâm BÀN GIAO CHO ĐẠT] Nhật ký truy vết 800 ảnh
-    ├── experiment_log.csv           # [Hào BÀN GIAO CHO ĐẠT] Nhật ký các lần chạy huấn luyện
-    ├── test_metrics.csv             # [Hào BÀN GIAO CHO ĐẠT] Bảng điểm số Precision/Recall/mAP
-    ├── demo_checklist.md            # [Hảo] Danh sách kiểm thử giao diện
-    ├── figures/                     # [Đạt] Các hình ảnh được chọn lọc cho báo cáo
-    └── report/                      # [Đạt] Báo cáo đồ án chính thức (Word / PDF)
+    ├── data_summary.csv        # Số đối tượng mỗi lớp theo train/val/test
+    ├── split_manifest.csv      # Ảnh nào thuộc tập nào, mã hash, nhóm khung hình
+    ├── experiment_log.csv      # Nhật ký các lần train
+    ├── test_metrics.csv        # Điểm trên tập test, tổng và từng lớp
+    ├── demo_checklist.md       # Danh sách kiểm thử giao diện
+    ├── report_outline.md       # Dàn ý báo cáo
+    ├── figures/                # Hình chọn cho báo cáo
+    ├── v1_4lop/, v2_11lop/     # Số liệu của các bản cũ
+    └── report/                 # Báo cáo chính thức (Word/PDF)
 ```
 
 ---
 
-## 3. HƯỚNG DẪN CÀI ĐẶT MÔI TRƯỜNG & CHẠY LỆNH
+## 3. CÀI ĐẶT VÀ CHẠY
 
-### Bước 1: Khởi tạo môi trường ảo Python
-Mở Terminal tại thư mục gốc `traffic-sign-demo`:
-```bash
-# Khởi tạo môi trường ảo (khuyến nghị Python 3.10 - 3.12 hoặc 3.14)
-python -m venv .venv
+### Cài đặt
 
-# Kích hoạt môi trường trên Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# Hoặc trên Command Prompt (cmd):
-.\.venv\Scripts\activate.bat
-```
-
-### Bước 2: Cài đặt các thư viện cần thiết
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## 4. HƯỚNG DẪN CHI TIẾT DÀNH CHO BẠN HÀO (HUẤN LUYỆN & NHẬN DIỆN)
-
-Tâm đã hoàn thành toàn bộ phần chuẩn bị và kiểm định dữ liệu. Hào chỉ cần làm theo các bước chuẩn sau:
-
-### L1. Kiểm tra dữ liệu nhận từ Tâm
-* Mở file [`configs/data.yaml`](configs/data.yaml) để xác nhận đường dẫn dữ liệu sạch `data/processed/`.
-* Mở file [`configs/classes.json`](configs/classes.json) để xác nhận 4 ID:
-  `0: Cấm đỗ xe`, `1: Cấm dừng và đỗ xe`, `2: Cấm rẽ trái`, `3: Cấm rẽ phải`.
-* Dữ liệu đã chia sẵn: **560 ảnh Train, 120 ảnh Val, 120 ảnh Test**; mỗi lớp có đúng 200 đối tượng.
-
-### L2. Viết chương trình huấn luyện ([`src/train.py`](src/train.py))
-* Sử dụng mô hình `yolo11n.pt` (hoặc `yolov8n.pt`) làm trọng số khởi đầu.
-* Khung code chuẩn khuyến nghị:
-  ```python
-  from ultralytics import YOLO
-  from src.paths import DATA_YAML_PATH, ROOT_DIR
-
-  def main():
-      model = YOLO("yolo11n.pt")
-      results = model.train(
-          data=str(DATA_YAML_PATH),
-          epochs=30,        # Khởi đầu thử nghiệm 3-5 epoch, sau đó tăng lên 30 epoch
-          imgsz=416,        # Kích thước 416x416 giúp train nhanh trên CPU
-          batch=4,          # Giảm xuống 2 nếu thiếu RAM
-          device="cpu",     # Đặt "cpu" hoặc 0 nếu máy có GPU NVIDIA CUDA
-          workers=2,
-          fliplr=0.0,       # CỰC KỲ QUAN TRỌNG: Không lật ngang ảnh (tránh làm đảo biển rẽ trái/phải)
-          flipud=0.0,       # Không lật dọc
-          project=str(ROOT_DIR / "outputs" / "training"),
-          name="traffic_sign_yolo11",
-          exist_ok=True,
-      )
-
-  if __name__ == "__main__":
-      main()
-  ```
-* Chạy huấn luyện bằng lệnh:
-  ```bash
-  python -m src.train
-  ```
-
-### L3. Lưu mô hình & Ghi nhật ký
-* Sau khi train xong, sao chép trọng số tốt nhất từ thư mục kết quả:
-  `outputs/training/traffic_sign_yolo11/weights/best.pt` $\longrightarrow$ lưu vào **`models/best.pt`**.
-* Cập nhật các thông số chạy thực tế (epoch, batch, thời gian chạy, mAP50 trên tập val) vào file **`docs/experiment_log.csv`**.
-
-### L4. Viết hàm nhận diện bàn giao cho Hảo tích hợp GUI ([`src/predict.py`](src/predict.py))
-Hảo cần một hàm nạp model một lần và hàm nhận diện trả về kết quả chuẩn để hiển thị lên Tkinter. Hào viết đúng hợp đồng hàm sau:
-```python
-import cv2
-from ultralytics import YOLO
-
-def load_model(model_path):
-    """Nạp trọng số YOLO (chỉ gọi 1 lần khi mở app)."""
-    return YOLO(model_path)
-
-def predict_image(model, image_path: str, confidence: float = 0.25):
-    """
-    Suy luận trên 1 ảnh.
-    Trả về: (annotated_bgr, detections)
-      - annotated_bgr: numpy.ndarray ảnh đã vẽ bounding box (BGR)
-      - detections: list các dict [
-            {
-                "class_id": 0,
-                "class_name": "Cấm đỗ xe",
-                "confidence": 0.89,
-                "bbox": [x1, y1, x2, y2]
-            }, ...
-        ]
-    Nếu không có biển thì trả về detections là list rỗng [].
-    """
-    results = model.predict(source=image_path, conf=confidence, verbose=False)
-    r = results[0]
-    annotated_bgr = r.plot()  # Ảnh có sẵn khung của YOLO
-    
-    detections = []
-    for box in r.boxes:
-        cid = int(box.cls[0].item())
-        conf = float(box.conf[0].item())
-        xyxy = box.xyxy[0].tolist()
-        cname = model.names.get(cid, f"Class {cid}")
-        detections.append({
-            "class_id": cid,
-            "class_name": cname,
-            "confidence": conf,
-            "bbox": [int(x) for x in xyxy],
-        })
-    return annotated_bgr, detections
-```
-
-### L5. Đánh giá chất lượng mô hình trên tập Test ([`src/evaluate.py`](src/evaluate.py))
-* Đánh giá mô hình `models/best.pt` trên 120 ảnh của tập `data/processed/images/test`.
-* Xuất bảng chỉ số Precision, Recall, mAP50, mAP50-95 vào file **`docs/test_metrics.csv`** để bàn giao cho Đạt.
-
----
-
-## 5. HƯỚNG DẪN CHI TIẾT DÀNH CHO BẠN ĐẠT (VIẾT BÁO CÁO & THUYẾT TRÌNH)
-
-Đạt có thể lấy ngay toàn bộ tư liệu, bảng biểu và hình ảnh đã được chuẩn bị sẵn để đưa vào bài báo cáo:
-
-### Đ1. Dàn ý báo cáo đề xuất ([`docs/report_outline.md`](docs/report_outline.md))
-* **Chương 1:** Giới thiệu đề tài, mục tiêu nhận diện 4 loại biển báo cấm, phạm vi ứng dụng.
-* **Chương 2:** Cơ sở lý thuyết (Xử lý ảnh số: không gian màu HSV, hình thái học morphology, tìm contour; Học sâu: mạng nơ-ron tích chập và kiến trúc YOLO).
-* **Chương 3:** Thu thập, tiền xử lý và tổ chức dữ liệu.
-* **Chương 4:** Xây dựng ứng dụng và Thực nghiệm (So sánh phương pháp OpenCV cổ điển vs YOLO; Kết quả huấn luyện mô hình).
-* **Chương 5:** Thiết kế giao diện người dùng Tkinter & Thử nghiệm thực tế.
-* **Chương 6:** Kết luận, hạn chế và hướng phát triển tương lai.
-
-### Đ2. Tư liệu Chương 3: Dữ liệu & Tiền xử lý (Lấy từ Tâm)
-1. **Bảng số liệu thống kê:** Mở file **[`docs/data_summary.csv`](docs/data_summary.csv)**:
-   * Tổng số ảnh: **800 ảnh** (Train: 560 ảnh - 70%, Val: 120 ảnh - 15%, Test: 120 ảnh - 15%).
-   * Phân bố đối tượng: Mỗi lớp có **đúng 200 đối tượng** (Cấm đỗ xe: 200, Cấm dừng đỗ: 200, Cấm rẽ trái: 200, Cấm rẽ phải: 200) $\rightarrow$ Đạt nhấn mạnh đây là **tập dữ liệu cân bằng hoàn hảo (Class Balance)**, giúp mô hình không bị thiên vị.
-2. **Kỹ thuật chống rò rỉ dữ liệu (Data Leakage):**
-   * Giải thích: Bộ dữ liệu gốc được trích xuất từ camera hành trình nên có nhiều khung hình liên tiếp của cùng một đoạn đường.
-   * Giải pháp: Nhóm đã nhóm các khung hình theo cụm video (`group_id`) trong file [`docs/split_manifest.csv`](docs/split_manifest.csv) để đảm bảo toàn bộ các khung hình của một đoạn đường chỉ nằm trong Train hoặc chỉ nằm trong Test.
-3. **Hình ảnh minh họa Bounding Box:**
-   * Chèn bức ảnh **[`outputs/label_verification/verification_overview_grid.jpg`](outputs/label_verification/verification_overview_grid.jpg)** vào báo cáo: Đây là ảnh lưới 12 ô hiển thị trực quan 4 lớp trên 3 tập với viền màu và tên tiếng Việt rõ ràng.
-
-### Đ3. Tư liệu Chương 2 & 4: Thực nghiệm Xử lý ảnh OpenCV (Lấy từ Tâm)
-* Mở file **[`outputs/preprocessing/opencv_experiment_report.md`](outputs/preprocessing/opencv_experiment_report.md)** để lấy nguyên văn cơ sở lý thuyết và kết quả:
-  * **Lý thuyết:** Giải thích tại sao dùng HSV thay cho RGB; kỹ thuật gộp 2 dải màu đỏ $[0, 10]$ và $[160, 179]$; tác dụng của phép Mở (Erosion $\to$ Dilation) và phép Đóng (Dilation $\to$ Erosion) với kernel elip.
-  * **Bảng kết quả 5 trường hợp:**
-    * *Ảnh đủ sáng:* IoU = 0.75 (OpenCV bắt trúng vị trí biển).
-    * *Ảnh thiếu sáng/bóng râm:* IoU = 0.00 (màu đỏ bị chìm vào bóng tối).
-    * *Ảnh biển nhỏ ở xa:* IoU = 0.00 (bị phép lọc nhiễu xóa mất).
-    * *Ảnh biển lớn:* IoU = 0.73 (bắt chính xác 100%).
-    * *Ảnh nền phức tạp:* Bị 10 dương tính giả do bắt nhầm đèn xe ô tô màu đỏ.
-  * **Hình ảnh chèn báo cáo:** Lấy các ảnh ghép quy trình 6 bước tại:
-    `outputs/preprocessing/case_1_bright_light/pipeline_collage_*.jpg`.
-  * **Luận điểm so sánh:** *OpenCV nhanh, nhẹ nhưng dễ bị nhiễu và không đọc được ký hiệu bên trong biển; do đó YOLO là giải pháp tối ưu cho ứng dụng nhận diện hoàn chỉnh.*
-
-### Đ4. Tư liệu Chương 4 & 5: Kết quả Mô hình & Giao diện (Lấy từ Hào và Hảo)
-* **Từ Hào:** Lấy biểu đồ huấn luyện trong `outputs/training/`, bảng điểm mAP trong `docs/test_metrics.csv` và ảnh một số ca dự đoán đúng/sai.
-* **Từ Hảo:** Lấy ảnh chụp giao diện Tkinter đang chạy thực tế, quy trình chọn ảnh $\rightarrow$ nhận diện $\rightarrow$ hiển thị bảng kết quả $\rightarrow$ lưu ảnh.
-
----
-
-## 6. DANH SÁCH KIỂM TRA TRƯỚC KHI BÁO CÁO / NỘP BÀI
-
-- [x] **T1:** Bảng nhãn `configs/classes.json` chuẩn 4 ID.
-- [x] **T2 & T3:** Dữ liệu 800 ảnh sạch, chuẩn YOLO, không trùng lặp, chia tập 70/15/15.
-- [x] **T4:** Kiểm định 100% tọa độ nhãn hợp lệ, có ảnh lưới tổng quan 12 ô `verification_overview_grid.jpg`.
-- [x] **T5:** Thực nghiệm OpenCV 5 trường hợp, có báo cáo phân tích Markdown chi tiết.
-- [x] **T6:** Toàn bộ tài liệu hướng dẫn và bản đồ vị trí file được cập nhật đầy đủ.
-- [ ] **L1 - L6:** Hào hoàn thành huấn luyện `best.pt`, xuất `predict.py` và bảng điểm `test_metrics.csv`.
-- [ ] **H1 - H6:** Hảo hoàn thiện giao diện Tkinter gọi `predict_image`, kiểm thử và đóng gói.
-- [ ] **Đ1 - Đ6:** Đạt hoàn thiện bản báo cáo Word/PDF và slide thuyết trình.
-
----
-
-## 7. CHẠY GIAO DIỆN TKINTER CỦA HẢO
-
-### Cài đặt và khởi chạy
-
-Mở PowerShell ở thư mục dự án. Nếu chưa có môi trường ảo, tạo một lần rồi cài các thư viện:
+Mở PowerShell ở thư mục dự án (khuyến nghị Python 3.10–3.14):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+`requirements.txt` cài PyTorch bản CPU, đủ để chạy app. Chỉ cần bản GPU khi muốn train lại (xem [mục 6](#6-huấn-luyện-và-đánh-giá)).
+
+Lần nhận diện đầu tiên, Ultralytics có thể tự cài thêm gói `pi-heif` (cần internet).
+
+### Giao diện
+
+```powershell
 .\.venv\Scripts\python.exe app.py
 ```
 
-Nếu `.venv` đã tồn tại, bỏ qua lệnh tạo môi trường. Ứng dụng dùng trọng số tại
-`models/best.pt`; nếu thiếu model hoặc thư viện YOLO, vẫn mở được giao diện xem ảnh,
-còn nút **Nhận diện** sẽ không hoạt động.
+Model `models/best.pt` được nạp một lần khi mở app. Nếu thiếu model hoặc thư viện YOLO, app vẫn mở được để xem ảnh, nhưng các nút nhận diện bị tắt.
 
-### Sử dụng
+**Ảnh:**
+1. Bấm **Chọn ảnh** (JPG/JPEG/PNG), chỉnh ngưỡng confidence rồi bấm **Nhận diện**.
+2. Bảng kết quả hiện tên lớp, confidence và tọa độ khung.
+3. Bấm **Lưu kết quả** để lưu ảnh JPG/PNG (mặc định `<tên_ảnh>_ket_qua.jpg`).
+4. Khi đổi ảnh hoặc đổi ngưỡng, kết quả cũ bị xóa để không gắn nhầm với đầu vào mới.
 
-1. Chọn ảnh JPG/JPEG/PNG. Ảnh được giữ đúng tỷ lệ; ảnh PNG trong suốt hiển thị trên nền trắng.
-2. Điều chỉnh ngưỡng confidence rồi bấm **Nhận diện**. Có thể tiếp tục thao tác giao diện trong lúc model xử lý.
-3. Xem ảnh có khung và tên lớp, confidence cùng tọa độ bounding box trong bảng kết quả.
-4. Bấm **Lưu kết quả** để chọn nơi lưu ảnh JPG hoặc PNG. Mặc định tên file là `<tên_ảnh>_ket_qua.jpg`.
-5. Khi đổi/xóa ảnh hoặc đổi ngưỡng confidence, kết quả trước đó bị xóa để tránh gắn nhầm với đầu vào mới.
-
-Model được nạp một lần khi mở ứng dụng. `app.py` gọi `load_model` và `predict_image`
-trong `src/predict.py`; suy luận chạy trên worker thread và chỉ cập nhật widget ở luồng Tkinter.
-Các bước cần kiểm tra trước buổi demo nằm trong [`docs/demo_checklist.md`](docs/demo_checklist.md).
-
-### Nhận diện video
-
+**Video:**
 1. Bấm **Chọn video** (MP4/AVI/MOV/MKV), rồi chọn nơi lưu video kết quả (mặc định `outputs/predictions/videos/<tên>_ket_qua.mp4`).
-2. Hai khung hiển thị khung hình gốc và khung đã nhận diện khi video đang chạy; bảng hiện các biển của khung hiện tại.
-3. Bấm **Dừng video** để dừng sớm; phần đã xử lý vẫn được lưu. Khi xong, dòng trạng thái liệt kê biển xuất hiện và số khung.
-4. Trong lúc chạy video, các nút ảnh và thanh ngưỡng bị khóa; ngưỡng dùng là giá trị lúc bấm Chọn video.
+2. Trong lúc chạy, hai khung hiển thị khung hình gốc và khung đã nhận diện; bảng hiện các biển của khung hiện tại.
+3. Bấm **Dừng video** để dừng sớm; phần đã xử lý vẫn được lưu.
+4. Khi xong, dòng trạng thái báo số khung, tốc độ xử lý và các biển đã xuất hiện.
+5. Trong lúc chạy, các nút ảnh và thanh ngưỡng bị khóa; ngưỡng dùng là giá trị lúc bấm Chọn video.
+
+Các ca kiểm thử giao diện và kết quả nằm trong [`docs/demo_checklist.md`](docs/demo_checklist.md).
+
+### Dòng lệnh
+
+```powershell
+.\.venv\Scripts\python.exe -m src.predict "duong_dan_anh.jpg" 0.25
+.\.venv\Scripts\python.exe -m src.predict_video "duong_dan_video.mp4" 0.25 --out "ket_qua.mp4"
+```
+
+Dùng trong code Python:
+
+```python
+from src.predict import load_model, predict_image
+
+model = load_model()  # nạp 1 lần
+annotated_bgr, detections = predict_image(model, "anh.jpg", confidence=0.25)
+# detections: [{"class_id", "class_name", "confidence", "bbox": [x1, y1, x2, y2]}, ...]
+```
 
 ---
 
-## 8. BẢN MỞ RỘNG: 28 LỚP BIỂN BÁO + VIDEO
+## 4. 28 LỚP BIỂN BÁO
 
-### Dữ liệu
+Bảng đầy đủ nằm ở [`configs/classes.json`](configs/classes.json); nguồn và điểm từng lớp nằm ở [`models/README.md`](models/README.md).
 
-Giải nén 3 bộ dữ liệu vào `data/` (đều nằm trong `.gitignore`):
-
-| Thư mục | Bộ dữ liệu |
+| Nhóm | ID và tên lớp |
 | --- | --- |
-| `data/raw/` | `vietnam_traffic_signs_dataset-main.zip` (16 lớp) |
-| `data/raw_ds2/` | `Vietnamese traffic signs detection and recognition.zip` (29 lớp) |
-| `data/raw_ds3/` | `Vietnam Traffic Signs.zip` (52 lớp) |
+| Biển cấm | 0 Cấm đỗ xe · 1 Cấm dừng và đỗ xe · 2 Cấm rẽ trái · 3 Cấm rẽ phải · 4 Cấm đi ngược chiều · 5 Cấm quay đầu · 6 Cấm rẽ trái và quay đầu · 7 Cấm ô tô khách và ô tô tải · 8 Cấm xe hai và ba bánh · 9 Cấm mô tô và xe máy · 22 Cấm ô tô · 23 Cấm ô tô rẽ trái |
+| Giới hạn tốc độ | 13 Tốc độ 60 km/h · 15 Tốc độ 40 km/h · 19 Tốc độ 80 km/h |
+| Nguy hiểm, cảnh báo | 12 Đi chậm · 14 Đường người đi bộ cắt ngang · 16 Giao nhau với đường không ưu tiên · 21 Chỗ ngoặt nguy hiểm vòng bên trái · 26 Trẻ em · 27 Giao nhau với đường ưu tiên |
+| Hiệu lệnh | 10 Dừng lại · 11 Phải đi vòng sang bên phải · 24 Hướng đi phải theo: rẽ phải · 25 Hướng đi phải theo: rẽ trái |
+| Chỉ dẫn | 17 Biển gộp làn đường theo phương tiện · 18 Bến xe buýt · 20 Đường một chiều |
 
-Bảng lớp nằm ở [`configs/classes.json`](configs/classes.json); bảng map ID nguồn → ID dự án nằm ở `SOURCES` trong [`src/prepare_merged.py`](src/prepare_merged.py).
-Script bỏ những ảnh ds2 có nhãn gộp nhiều loại biển ("speed limit", "road danger", "indication"...), khử trùng MD5,
-giới hạn 700 đối tượng mỗi lớp để lớp nhiều ảnh của ds1 không lấn át, rồi chia theo cụm 25 khung hình liên tiếp.
-Các lớp 11–21 lấy từ ds3, chỉ chọn biển xuất hiện trong ít nhất 13 cụm 25 khung khác nhau (ds3 là khung video, đếm theo khung sẽ đánh giá quá cao số biển thật).
-Các lớp 22–27 lấy chủ yếu từ ds1, sau khi xem ảnh cắt để loại các lớp ds1 lẫn nhiều kiểu biển.
+Model chỉ nhận diện 28 lớp này. Biển khác cho kết quả rỗng hoặc bị gán nhầm sang lớp gần giống.
+
+---
+
+## 5. DỮ LIỆU
+
+Giải nén 3 bộ dữ liệu vào `data/` (không đưa lên Git):
+
+| Thư mục | Bộ dữ liệu | Ghi chú |
+| --- | --- | --- |
+| `data/raw/` | `vietnam_traffic_signs_dataset-main.zip` (ds1, 16 lớp) | Ảnh biển to, rõ |
+| `data/raw_ds2/` | `Vietnamese traffic signs detection and recognition.zip` (ds2, 29 lớp) | Có nhãn gộp nhiều loại biển |
+| `data/raw_ds3/` | `Vietnam Traffic Signs.zip` (ds3, 52 lớp) | Khung hình liên tiếp từ video |
 
 ```powershell
-.\.venv\Scripts\python.exe -m src.prepare_merged          # ghi data/processed, docs/data_summary.csv, docs/split_manifest.csv
-.\.venv\Scripts\python.exe -m src.check_and_visualize     # kiểm định nhãn
+.\.venv\Scripts\python.exe -m src.prepare_merged        # ghi data/processed, docs/data_summary.csv, docs/split_manifest.csv, configs/*.yaml
+.\.venv\Scripts\python.exe -m src.check_and_visualize   # kiểm định nhãn, ảnh lưới ở outputs/label_verification/
 ```
 
-`src.prepare_data` (bản 4 lớp) ghi vào cùng `data/processed`; chạy lại nó sẽ thay bộ 28 lớp.
+`src/prepare_merged.py` làm các bước sau. Bảng map ID nguồn → ID dự án nằm ở `SOURCES` trong file.
+1. **Map ID** nhãn của từng bộ về 28 lớp, sau khi xem ảnh cắt để chỉ gộp các biển thật sự giống nhau.
+2. **Bỏ ảnh có nhãn mơ hồ**, ví dụ "speed limit" hay "road danger" của ds2 gộp nhiều biển. Giữ lại thì biển trong ảnh thành nền chưa gán nhãn.
+3. **Khử trùng** bằng MD5.
+4. **Giới hạn 700 đối tượng mỗi lớp** để các lớp nhiều ảnh của ds1 không lấn át.
+5. **Chia train/val/test 70/15/15 theo cụm 25 khung hình liên tiếp**, để khung gần giống nhau của cùng một đoạn video không rơi vào cả train và test.
 
-### Huấn luyện trên GPU
+Lớp từ ds3 chỉ được chọn khi biển xuất hiện trong ít nhất 13 cụm khác nhau. ds3 là khung video, nên đếm theo khung sẽ đánh giá quá cao số biển thật.
 
-`requirements.txt` cài bản PyTorch CPU. Để train bằng GPU NVIDIA, cài thêm bản CUDA vào `.venv`:
+| Tập | Ảnh | Đối tượng |
+| --- | :-: | :-: |
+| Train | 5.403 | 8.961 |
+| Val | 1.273 | 1.958 |
+| Test | 1.210 | 2.041 |
+
+Kiểm định: 0 nhãn sai định dạng, 0 ảnh thiếu nhãn hoặc nhãn thiếu ảnh. `src.prepare_data` (bộ 4 lớp ban đầu) ghi vào cùng `data/processed`, nên chạy nó sẽ thay bộ 28 lớp.
+
+---
+
+## 6. HUẤN LUYỆN VÀ ĐÁNH GIÁ
+
+Cài PyTorch bản CUDA vào `.venv` để train trên GPU NVIDIA, rồi train và đánh giá:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu126
@@ -321,11 +185,76 @@ Các lớp 22–27 lấy chủ yếu từ ds1, sau khi xem ảnh cắt để lo�
 .\.venv\Scripts\python.exe -m src.evaluate --imgsz 640 --device 0 --examples
 ```
 
-`--workers 0` là cố ý: trên Windows mỗi worker nạp lại thư viện CUDA (~1.4 GB bộ nhớ ảo); máy 16 GB RAM
-bị lỗi `WinError 1455` khi dùng 4 worker. `--cache disk` lưu ảnh đã giải mã thành `.npy` cạnh ảnh để không chiếm RAM.
+* `fliplr=0` được đặt sẵn trong `src/train.py`: lật ngang sẽ đổi biển rẽ trái thành rẽ phải.
+* `--workers 0` là cố ý. Trên Windows mỗi worker nạp lại thư viện CUDA (khoảng 1,4 GB bộ nhớ ảo), nên máy 16 GB RAM bị lỗi `WinError 1455` khi dùng 4 worker. `--cache disk` lưu ảnh đã giải mã thành `.npy` để không chiếm RAM.
+* `--save-model` chép trọng số tốt nhất (chọn theo tập val) vào `models/best.pt`. Mỗi lần train thêm một dòng vào `docs/experiment_log.csv`.
+* `--imgsz` khi đánh giá phải trùng lúc train. `evaluate.py` ghi đè `docs/test_metrics.csv` và lưu ảnh ví dụ đúng / sai / bỏ sót vào `outputs/predictions/examples/`.
 
-### Video từ dòng lệnh
+Lần train hiện tại (`run_28lop_50ep`) chạy trên RTX 4050 Laptop, mất 112 phút.
 
-```powershell
-.\.venv\Scripts\python.exe -m src.predict_video "duong_dan_video.mp4" 0.25 --out "ket_qua.mp4"
-```
+**Kết quả:**
+* 16/28 lớp đạt mAP@0.5 ≥ 0,9 trên tập test.
+* Lớp yếu nhất:
+
+  | Lớp | mAP@0.5 |
+  | --- | :-: |
+  | Đường một chiều | 0,32 |
+  | Cấm ô tô khách và ô tô tải | 0,62 |
+  | Tốc độ 80 km/h | 0,64 |
+  | Đi chậm | 0,77 |
+  | Tốc độ 60 km/h | 0,77 |
+
+  Các lớp này lấy từ ds3, nên tập train chỉ có ít biển thật lặp lại qua nhiều khung hình.
+* "Cấm mô tô và xe máy" (3 đối tượng test) và "Cấm quay đầu" (13) có quá ít mẫu nên điểm không ổn định.
+
+Bảng từng lớp và các giới hạn cần nêu trong báo cáo nằm ở [`models/README.md`](models/README.md).
+
+---
+
+## 7. TƯ LIỆU CHO BÁO CÁO (ĐẠT)
+
+* **Dàn ý:** [`docs/report_outline.md`](docs/report_outline.md).
+* **Chương dữ liệu:**
+  * Số liệu: [`docs/data_summary.csv`](docs/data_summary.csv) và [mục 5](#5-dữ-liệu).
+  * Cách chống rò rỉ dữ liệu: chia theo cụm khung hình, cột `group_id` trong [`docs/split_manifest.csv`](docs/split_manifest.csv).
+* **Chương thực nghiệm OpenCV:**
+  * Báo cáo đầy đủ: `outputs/preprocessing/opencv_experiment_report.md` (sinh bằng `python -m src.preprocess`). Báo cáo giải thích HSV, cách gộp 2 dải màu đỏ, và phép mở/đóng với kernel elip.
+  * Kết quả 5 trường hợp:
+
+    | Trường hợp | Kết quả |
+    | --- | --- |
+    | Đủ sáng | IoU 0,75 |
+    | Thiếu sáng | IoU 0 |
+    | Biển nhỏ ở xa | IoU 0 |
+    | Biển lớn | IoU 0,73 |
+    | Nền phức tạp | 10 dương tính giả (bắt nhầm đèn xe màu đỏ) |
+
+  * Kết luận: OpenCV nhanh nhưng dễ nhiễu và không đọc được ký hiệu trong biển, nên YOLO phù hợp hơn cho ứng dụng hoàn chỉnh.
+* **Chương kết quả mô hình:**
+  * Bảng điểm: [`docs/test_metrics.csv`](docs/test_metrics.csv), [`models/README.md`](models/README.md).
+  * Nhật ký train: [`docs/experiment_log.csv`](docs/experiment_log.csv).
+  * Biểu đồ loss/mAP: `outputs/training/run_28lop_50ep/`.
+* **Hình đã chọn trong [`docs/figures/`](docs/figures):**
+
+  | Hình | Nội dung |
+  | --- | --- |
+  | `fig01` | Lưới kiểm định nhãn 28 lớp × 3 tập |
+  | `fig02`–`fig06` | 5 ca thực nghiệm OpenCV |
+  | `fig07` | Confusion matrix trên tập test |
+  | `fig08` | Đường PR |
+  | `fig09` | Ví dụ nhận đúng |
+  | `fig10` | Ví dụ nhận sai |
+  | `fig11` | Ví dụ bỏ sót |
+
+* **Chương giao diện:** ảnh chụp app khi nhận diện ảnh và video; quy trình chọn → nhận diện → xem bảng → lưu.
+
+---
+
+## 8. TRẠNG THÁI
+
+- [x] Dữ liệu 28 lớp gộp từ 3 bộ, kiểm định nhãn đạt.
+- [x] Model 28 lớp, đánh giá trên tập test, ghi số liệu.
+- [x] Giao diện nhận diện ảnh và video; lệnh `src.predict`, `src.predict_video`.
+- [x] Thực nghiệm OpenCV 5 trường hợp.
+- [ ] Chạy thử nút video trong app với model 28 lớp (đã kiểm thử với model 11 lớp).
+- [ ] Báo cáo Word/PDF và slide thuyết trình.
