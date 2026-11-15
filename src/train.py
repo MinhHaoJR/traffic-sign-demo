@@ -1,5 +1,5 @@
 """
-[Hào] Huấn luyện YOLO11 cho 4 lớp biển báo cấm.
+[Hào] Huấn luyện YOLO11 cho các lớp biển báo trong configs/classes.json.
 
 Chạy thử nhanh (3 epoch):   python -m src.train
 Huấn luyện đầy đủ:          python -m src.train --epochs 30 --name run_30ep --save-model
@@ -54,7 +54,7 @@ def append_log(row: dict) -> None:
 
 
 def main():
-    p = argparse.ArgumentParser(description="Huấn luyện YOLO cho 4 lớp biển báo.")
+    p = argparse.ArgumentParser(description="Huấn luyện YOLO cho biển báo.")
     p.add_argument("--model", default="yolo11n.pt", help="Trọng số khởi đầu")
     p.add_argument("--epochs", type=int, default=3)
     p.add_argument("--imgsz", type=int, default=416)
@@ -62,9 +62,13 @@ def main():
     p.add_argument("--device", default="cpu", help="cpu hoặc 0 (GPU NVIDIA)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--cache", choices=["ram", "disk"], default=None,
+                   help="Giữ ảnh đã giải mã để nạp nhanh hơn (cần --workers 0 trên máy ít RAM)")
     p.add_argument("--name", default="traffic_sign_yolo11")
     p.add_argument("--save-model", action="store_true",
                    help="Chép best.pt của lần chạy này vào models/best.pt")
+    p.add_argument("--resume", action="store_true",
+                   help="Chạy tiếp lần train --name bị ngắt từ last.pt (giữ nguyên tham số cũ)")
     a = p.parse_args()
 
     import torch
@@ -75,22 +79,25 @@ def main():
     device = int(a.device) if a.device.isdigit() else a.device
 
     start = time.time()
-    model = YOLO(a.model)
-    results = model.train(
-        data=str(data_yaml),
-        epochs=a.epochs,
-        imgsz=a.imgsz,
-        batch=a.batch,
-        device=device,
-        workers=a.workers,
-        seed=a.seed,
-        cache=False,
-        fliplr=0.0,  # không lật ngang: sẽ đảo nghĩa biển rẽ trái/rẽ phải
-        flipud=0.0,
-        project=str(TRAINING_OUTPUT_DIR),
-        name=a.name,
-        exist_ok=True,
-    )
+    if a.resume:
+        # train_time_min trong nhật ký chỉ tính phần chạy tiếp
+        results = YOLO(TRAINING_OUTPUT_DIR / a.name / "weights" / "last.pt").train(resume=True)
+    else:
+        results = YOLO(a.model).train(
+            data=str(data_yaml),
+            epochs=a.epochs,
+            imgsz=a.imgsz,
+            batch=a.batch,
+            device=device,
+            workers=a.workers,
+            seed=a.seed,
+            cache=a.cache or False,
+            fliplr=0.0,  # không lật ngang: sẽ đảo nghĩa biển rẽ trái/rẽ phải
+            flipud=0.0,
+            project=str(TRAINING_OUTPUT_DIR),
+            name=a.name,
+            exist_ok=True,
+        )
     minutes = (time.time() - start) / 60
 
     best = Path(results.save_dir) / "weights" / "best.pt"

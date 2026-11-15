@@ -69,13 +69,13 @@ def save_examples(model, conf: float) -> dict:
     lbl_dir = PROCESSED_DATA_DIR / "labels" / "test"
     out_root = PREDICTIONS_OUTPUT_DIR / "examples"
     counts = {"correct": 0, "wrong": 0, "missed": 0}
-    for img_path in sorted(img_dir.glob("*.jpg")):
+    for img_path in sorted(f for f in img_dir.iterdir() if f.suffix.lower() in {".jpg", ".jpeg", ".png"}):
         h, w = cv2.imdecode(np.fromfile(str(img_path), np.uint8), cv2.IMREAD_COLOR).shape[:2]
         annotated, dets = predict_image(model, img_path, conf)
         kind = classify_image(read_gt(lbl_dir / f"{img_path.stem}.txt", w, h), dets)
         counts[kind] += 1
         if counts[kind] <= EXAMPLES_PER_KIND:
-            out = out_root / kind / img_path.name
+            out = out_root / kind / f"{img_path.stem}.jpg"
             out.parent.mkdir(parents=True, exist_ok=True)
             cv2.imencode(".jpg", annotated)[1].tofile(str(out))
     return counts

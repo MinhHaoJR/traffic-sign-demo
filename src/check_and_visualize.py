@@ -11,10 +11,11 @@ Thực hiện:
    - Mỗi lớp một màu sắc nhận diện riêng biệt.
    - Nhãn chữ tiếng Việt sắc nét bằng Pillow và font Unicode Windows.
    - Xuất từng ảnh mẫu vào outputs/label_verification/{train,val,test}/.
-4. Tạo ảnh ghép dạng lưới (Collage Grid) tổng quan 4 lớp x 3 tập để đối chiếu nhanh.
+4. Tạo ảnh ghép dạng lưới (Collage Grid) tổng quan mọi lớp x 3 tập để đối chiếu nhanh.
 """
 
 import os
+import re
 import sys
 from pathlib import Path
 from collections import defaultdict, Counter
@@ -46,7 +47,7 @@ from src.paths import (
     LABEL_VERIFICATION_DIR,
 )
 
-# Bảng màu đại diện cho 4 lớp biển báo (RGB)
+# Màu riêng cho 4 lớp gốc (RGB); lớp khác dùng đỏ mặc định
 CLASS_COLORS = {
     0: (30, 144, 255),    # Cấm đỗ xe: Xanh dương Dodger Blue
     1: (220, 20, 60),     # Cấm dừng và đỗ xe: Đỏ Crimson
@@ -84,7 +85,7 @@ def verify_yaml_configs() -> bool:
     else:
         with open(DATA_EXAMPLE_YAML_PATH, "r", encoding="utf-8") as f:
             ex_data = yaml.safe_load(f)
-        if ex_data.get("nc") == 4 and "names" in ex_data:
+        if ex_data.get("nc") and ex_data.get("nc") == len(ex_data.get("names") or {}):
             print(f"  [OK] data.example.yaml hợp lệ (nc={ex_data.get('nc')}, names={len(ex_data.get('names', {}))} lớp)")
         else:
             print("  [!] data.example.yaml thiếu trường nc hoặc names")
@@ -131,7 +132,7 @@ def audit_dataset_integrity(classes: dict[int, str]) -> dict:
         img_dir = IMAGES_DIR / split
         lbl_dir = LABELS_DIR / split
 
-        img_files = sorted(img_dir.glob("*.jpg"))
+        img_files = sorted(f for f in img_dir.iterdir() if f.suffix.lower() in {".jpg", ".jpeg", ".png"})
         lbl_files = sorted(lbl_dir.glob("*.txt"))
 
         img_names = {f.stem for f in img_files}
@@ -312,14 +313,14 @@ def generate_visual_samples(
             chosen_stems = rng.sample(available, min(samples_per_class, len(available)))
 
             for idx, stem in enumerate(chosen_stems):
-                img_path = img_dir / f"{stem}.jpg"
+                img_path = next(img_dir.glob(f"{stem}.*"), None)
                 lbl_path = lbl_dir / f"{stem}.txt"
 
-                if not img_path.exists():
+                if img_path is None:
                     continue
 
                 annotated_img = draw_bounding_boxes(img_path, lbl_path, classes, font)
-                out_filename = f"class_{cid}_{classes[cid].replace(' ', '_')}_{stem}.jpg"
+                out_filename = f"class_{cid}_{re.sub(r'[\\/:*?"<>| ]', '_', classes[cid])}_{stem}.jpg"
                 save_path = split_out_dir / out_filename
                 annotated_img.save(save_path, quality=95)
 
@@ -337,7 +338,7 @@ def build_collage_overview(
     classes: dict[int, str]
 ) -> None:
     """
-    Tạo ảnh ghép dạng lưới (Collage Grid) gồm đại diện 4 lớp x 3 tập (12 ô).
+    Tạo ảnh ghép dạng lưới (Collage Grid) gồm đại diện mỗi lớp x 3 tập.
     """
     print(f"\n--- 4. Tạo ảnh lưới tổng quan đối chiếu (Collage Grid) ---")
     if not selected_samples:
@@ -351,7 +352,7 @@ def build_collage_overview(
 
     tile_w, tile_h = 360, 270
     cols = 3  # Train, Val, Test
-    rows = 4  # 4 lớp biển báo
+    rows = len(classes)
 
     header_h = 60
     margin = 10
@@ -369,7 +370,7 @@ def build_collage_overview(
     draw.text((margin + 10, 15), title_text, fill=(20, 20, 20), font=title_font)
 
     # Header từng cột (Train, Val, Test)
-    split_names = ["TRAIN (560 ảnh)", "VAL (120 ảnh)", "TEST (120 ảnh)"]
+    split_names = [f"{sp.upper()} ({sum(1 for _ in (IMAGES_DIR / sp).iterdir())} ảnh)" for sp in ("train", "val", "test")]
     for c_idx, sp_name in enumerate(split_names):
         col_x = margin + c_idx * (tile_w + margin)
         draw.text((col_x + 10, header_h - 25), sp_name, fill=(80, 80, 80), font=header_font)

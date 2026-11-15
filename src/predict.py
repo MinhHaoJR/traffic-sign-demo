@@ -3,11 +3,13 @@
 
     model = load_model()                         # nạp 1 lần khi mở app
     annotated_bgr, detections = predict_image(model, "anh.jpg", 0.25)
+    annotated_bgr, detections = predict_frame(model, frame_bgr, 0.25)   # khung hình video
 
 detections: list dict {class_id, class_name, confidence, bbox=[x1, y1, x2, y2]}; rỗng nếu không có biển.
 Lỗi file/model ném FileNotFoundError / ValueError để giao diện bắt và hiển thị.
 """
 import json
+from functools import lru_cache
 from pathlib import Path
 
 import cv2
@@ -17,10 +19,19 @@ from PIL import Image, ImageDraw, ImageFont
 from src.paths import CLASSES_PATH, MODEL_PATH
 
 # BGR cho khung; mỗi lớp một màu để dễ phân biệt
-COLORS_BGR = {0: (255, 144, 30), 1: (60, 20, 220), 2: (0, 140, 255), 3: (87, 139, 46)}
+COLORS_BGR = {
+    0: (255, 144, 30), 1: (60, 20, 220), 2: (0, 140, 255), 3: (87, 139, 46),
+    4: (180, 105, 255), 5: (0, 215, 255), 6: (128, 0, 128), 7: (128, 128, 0),
+    8: (19, 69, 139), 9: (147, 20, 255), 10: (0, 0, 139), 11: (205, 90, 106),
+    12: (0, 165, 255), 13: (50, 205, 50), 14: (203, 192, 255), 15: (34, 139, 34),
+    16: (60, 180, 230), 17: (139, 61, 72), 18: (255, 191, 0), 19: (0, 100, 0),
+    20: (230, 216, 173), 21: (42, 42, 165), 22: (0, 0, 255), 23: (122, 150, 233),
+    24: (255, 0, 0), 25: (255, 255, 0), 26: (0, 255, 255), 27: (211, 0, 148),
+}
 _FONT_CANDIDATES = ["arial.ttf", "segoeui.ttf", "DejaVuSans.ttf"]  # cần font có dấu tiếng Việt
 
 
+@lru_cache(maxsize=1)
 def _class_names() -> dict:
     with open(CLASSES_PATH, encoding="utf-8") as f:
         return {int(k): v for k, v in json.load(f).items()}
@@ -78,7 +89,11 @@ def _draw(img_bgr: np.ndarray, detections: list) -> np.ndarray:
 
 def predict_image(model, image_path, confidence: float = 0.25):
     """Trả về (annotated_bgr, detections). Không mở cửa sổ cv2.imshow."""
-    img = _read_bgr(image_path)
+    return predict_frame(model, _read_bgr(image_path), confidence)
+
+
+def predict_frame(model, img: np.ndarray, confidence: float = 0.25):
+    """Như predict_image nhưng nhận sẵn ảnh BGR (một khung hình video)."""
     names = _class_names()
     result = model.predict(source=img, conf=confidence, verbose=False)[0]
 

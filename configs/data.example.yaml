@@ -4,9 +4,33 @@ train: images/train
 val: images/val
 test: images/test
 
-nc: 4
+nc: 28
 names:
-  0: Cấm đỗ xe
-  1: Cấm dừng và đỗ xe
-  2: Cấm rẽ trái
-  3: Cấm rẽ phải
+  0: "Cấm đỗ xe"
+  1: "Cấm dừng và đỗ xe"
+  2: "Cấm rẽ trái"
+  3: "Cấm rẽ phải"
+  4: "Cấm đi ngược chiều"
+  5: "Cấm quay đầu"
+  6: "Cấm rẽ trái và quay đầu"
+  7: "Cấm ô tô khách và ô tô tải"
+  8: "Cấm xe hai và ba bánh"
+  9: "Cấm mô tô và xe máy"
+  10: "Dừng lại"
+  11: "Phải đi vòng sang bên phải"
+  12: "Đi chậm"
+  13: "Giới hạn tốc độ 60 km/h"
+  14: "Đường người đi bộ cắt ngang"
+  15: "Giới hạn tốc độ 40 km/h"
+  16: "Giao nhau với đường không ưu tiên"
+  17: "Biển gộp làn đường theo phương tiện"
+  18: "Bến xe buýt"
+  19: "Giới hạn tốc độ 80 km/h"
+  20: "Đường một chiều"
+  21: "Chỗ ngoặt nguy hiểm vòng bên trái"
+  22: "Cấm ô tô"
+  23: "Cấm ô tô rẽ trái"
+  24: "Hướng đi phải theo: rẽ phải"
+  25: "Hướng đi phải theo: rẽ trái"
+  26: "Trẻ em"
+  27: "Giao nhau với đường ưu tiên"

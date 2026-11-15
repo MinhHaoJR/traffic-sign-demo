@@ -11,6 +11,7 @@
   * **ID 1:** `Cấm dừng và đỗ xe` *(Biển tròn viền đỏ, nền xanh, 2 vạch chéo đỏ)*
   * **ID 2:** `Cấm rẽ trái` *(Biển tròn viền đỏ, mũi tên rẽ trái bị gạch chéo)*
   * **ID 3:** `Cấm rẽ phải` *(Biển tròn viền đỏ, mũi tên rẽ phải bị gạch chéo)*
+* **Bản mở rộng (mục 8):** dữ liệu và cấu hình đã ở **28 lớp**, nhưng lần train 28 lớp (`run_28lop_50ep`) dừng ở epoch 8/50 (mAP@0.5 val 0,866 tại epoch 7) nên `models/best.pt` vẫn là model **11 lớp** (ID 0–10; số liệu ở `docs/v2_11lop/` và `models/README.md`). 28 lớp gồm biển cấm, giới hạn tốc độ, biển nguy hiểm, hiệu lệnh, chỉ dẫn, gộp từ 3 bộ dữ liệu (ID 0–3 giữ nguyên như trên). App và dòng lệnh nhận diện được cả **video**. Model 4 lớp ban đầu được giữ ở `models/best_4lop.pt`, số liệu cũ ở `docs/v1_4lop/`; số liệu bản 11 lớp ở `docs/v2_11lop/`.
 * **Nhóm thực hiện & Phân công vai trò:**
   * **Tâm:** Phụ trách Dữ liệu, Kiểm định nhãn & Thực nghiệm Xử lý ảnh OpenCV.
   * **Hào:** Phụ trách Huấn luyện mô hình YOLO, Đánh giá chỉ số & Viết hàm nhận diện.
@@ -275,3 +276,56 @@ còn nút **Nhận diện** sẽ không hoạt động.
 Model được nạp một lần khi mở ứng dụng. `app.py` gọi `load_model` và `predict_image`
 trong `src/predict.py`; suy luận chạy trên worker thread và chỉ cập nhật widget ở luồng Tkinter.
 Các bước cần kiểm tra trước buổi demo nằm trong [`docs/demo_checklist.md`](docs/demo_checklist.md).
+
+### Nhận diện video
+
+1. Bấm **Chọn video** (MP4/AVI/MOV/MKV), rồi chọn nơi lưu video kết quả (mặc định `outputs/predictions/videos/<tên>_ket_qua.mp4`).
+2. Hai khung hiển thị khung hình gốc và khung đã nhận diện khi video đang chạy; bảng hiện các biển của khung hiện tại.
+3. Bấm **Dừng video** để dừng sớm; phần đã xử lý vẫn được lưu. Khi xong, dòng trạng thái liệt kê biển xuất hiện và số khung.
+4. Trong lúc chạy video, các nút ảnh và thanh ngưỡng bị khóa; ngưỡng dùng là giá trị lúc bấm Chọn video.
+
+---
+
+## 8. BẢN MỞ RỘNG: 28 LỚP BIỂN BÁO + VIDEO
+
+### Dữ liệu
+
+Giải nén 3 bộ dữ liệu vào `data/` (đều nằm trong `.gitignore`):
+
+| Thư mục | Bộ dữ liệu |
+| --- | --- |
+| `data/raw/` | `vietnam_traffic_signs_dataset-main.zip` (16 lớp) |
+| `data/raw_ds2/` | `Vietnamese traffic signs detection and recognition.zip` (29 lớp) |
+| `data/raw_ds3/` | `Vietnam Traffic Signs.zip` (52 lớp) |
+
+Bảng lớp nằm ở [`configs/classes.json`](configs/classes.json); bảng map ID nguồn → ID dự án nằm ở `SOURCES` trong [`src/prepare_merged.py`](src/prepare_merged.py).
+Script bỏ những ảnh ds2 có nhãn gộp nhiều loại biển ("speed limit", "road danger", "indication"...), khử trùng MD5,
+giới hạn 700 đối tượng mỗi lớp để lớp nhiều ảnh của ds1 không lấn át, rồi chia theo cụm 25 khung hình liên tiếp.
+Các lớp 11–21 lấy từ ds3, chỉ chọn biển xuất hiện trong ít nhất 13 cụm 25 khung khác nhau (ds3 là khung video, đếm theo khung sẽ đánh giá quá cao số biển thật).
+Các lớp 22–27 lấy chủ yếu từ ds1, sau khi xem ảnh cắt để loại các lớp ds1 lẫn nhiều kiểu biển.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.prepare_merged          # ghi data/processed, docs/data_summary.csv, docs/split_manifest.csv
+.\.venv\Scripts\python.exe -m src.check_and_visualize     # kiểm định nhãn
+```
+
+`src.prepare_data` (bản 4 lớp) ghi vào cùng `data/processed`; chạy lại nó sẽ thay bộ 28 lớp.
+
+### Huấn luyện trên GPU
+
+`requirements.txt` cài bản PyTorch CPU. Để train bằng GPU NVIDIA, cài thêm bản CUDA vào `.venv`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu126
+.\.venv\Scripts\python.exe -m src.train --epochs 50 --imgsz 640 --batch 16 --device 0 --workers 0 --cache disk --name run_28lop_50ep --save-model
+.\.venv\Scripts\python.exe -m src.evaluate --imgsz 640 --device 0 --examples
+```
+
+`--workers 0` là cố ý: trên Windows mỗi worker nạp lại thư viện CUDA (~1.4 GB bộ nhớ ảo); máy 16 GB RAM
+bị lỗi `WinError 1455` khi dùng 4 worker. `--cache disk` lưu ảnh đã giải mã thành `.npy` cạnh ảnh để không chiếm RAM.
+
+### Video từ dòng lệnh
+
+```powershell
+.\.venv\Scripts\python.exe -m src.predict_video "duong_dan_video.mp4" 0.25 --out "ket_qua.mp4"
+```

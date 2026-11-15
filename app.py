@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 import warnings
 from pathlib import Path
 import tkinter as tk
@@ -118,6 +119,8 @@ class TrafficSignApp(tk.Tk):
         self._model_state = "loading"
         self._model_error = ""
         self._predicting = False
+        self._video_running = False
+        self._video_stop = threading.Event()
         self._input_revision = 0
         self._result_revision: int | None = None
         self._closed = False
@@ -165,7 +168,7 @@ class TrafficSignApp(tk.Tk):
         ).grid(row=0, column=0, sticky="w")
         ttk.Label(
             body,
-            text="Demo nhận diện bốn loại biển báo cấm bằng YOLO11n.",
+            text="Demo nhận diện 28 loại biển báo (cấm, tốc độ, nguy hiểm, chỉ dẫn) trên ảnh và video bằng YOLO11n.",
             style="Muted.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(3, 12))
 
@@ -175,6 +178,14 @@ class TrafficSignApp(tk.Tk):
             controls, text="Chọn ảnh", command=self.choose_image
         )
         self.choose_button.pack(side="left")
+        self.video_button = ttk.Button(
+            controls, text="Chọn video", command=self.choose_video, state="disabled"
+        )
+        self.video_button.pack(side="left", padx=(8, 0))
+        self.stop_button = ttk.Button(
+            controls, text="Dừng video", command=self.stop_video, state="disabled"
+        )
+        self.stop_button.pack(side="left", padx=(8, 0))
         self.detect_button = ttk.Button(
             controls,
             text="Nhận diện",
@@ -288,12 +299,22 @@ class TrafficSignApp(tk.Tk):
     def _process_worker_events(self):
         if self._closed:
             return
+        latest_frame = None
         while True:
             try:
                 event = self._worker_events.get_nowait()
             except queue.Empty:
                 break
             kind, *payload = event
+            if kind == "video_frame":
+                latest_frame = payload  # chỉ vẽ khung mới nhất để giao diện không bị dồn hàng
+                continue
+            if kind == "video_done":
+                self._finish_video(*payload)
+                continue
+            if kind == "video_error":
+                self._fail_video(*payload)
+                continue
             if kind == "model_ready":
                 self._model = payload[0]
                 self._model_state = "ready"
@@ -311,20 +332,29 @@ class TrafficSignApp(tk.Tk):
                 self._finish_prediction(*payload)
             elif kind == "prediction_error":
                 self._fail_prediction(*payload)
+        if latest_frame is not None:
+            self._show_video_frame(*latest_frame)
         self.after(80, self._process_worker_events)
 
     def _update_controls(self):
         has_image = self.selected_path is not None
         model_ready = self._model_state == "ready" and self._model is not None
+        video = self._video_running
         self.detect_button.configure(
-            state="normal" if has_image and model_ready and not self._predicting else "disabled"
+            state="normal" if has_image and model_ready and not self._predicting and not video else "disabled"
         )
         has_current_result = (
             self.annotated_image is not None
             and self._result_revision == self._input_revision
         )
-        self.save_button.configure(state="normal" if has_current_result else "disabled")
-        self.clear_button.configure(state="normal" if has_image else "disabled")
+        self.save_button.configure(state="normal" if has_current_result and not video else "disabled")
+        self.clear_button.configure(state="normal" if has_image and not video else "disabled")
+        self.choose_button.configure(state="disabled" if video else "normal")
+        self.video_button.configure(
+            state="normal" if model_ready and not self._predicting and not video else "disabled"
+        )
+        self.stop_button.configure(state="normal" if video else "disabled")
+        self.confidence_scale.state(["disabled"] if video else ["!disabled"])
 
     def choose_image(self):
         filename = filedialog.askopenfilename(
@@ -447,6 +477,15 @@ class TrafficSignApp(tk.Tk):
         self.annotated_image = image
         self._result_revision = revision
         self.result_panel.set_image(image, "Ảnh đã được xử lý.")
+        self._fill_results(detections)
+
+        if detections:
+            self.status.set(f"Đã phát hiện {len(detections)} biển báo.")
+        else:
+            self.status.set("Không phát hiện biển báo thuộc bốn lớp hỗ trợ trong ảnh này.")
+        self._update_controls()
+
+    def _fill_results(self, detections: list):
         self.results.delete(*self.results.get_children())
         for detection in detections:
             bbox = detection.get("bbox", [])
@@ -461,11 +500,96 @@ class TrafficSignApp(tk.Tk):
                 ),
             )
 
-        if detections:
-            self.status.set(f"Đã phát hiện {len(detections)} biển báo.")
-        else:
-            self.status.set("Không phát hiện biển báo thuộc bốn lớp hỗ trợ trong ảnh này.")
+    def choose_video(self):
+        if self._model_state != "ready" or self._predicting or self._video_running:
+            return
+        source = filedialog.askopenfilename(
+            parent=self,
+            title="Chọn video biển báo",
+            filetypes=[("Video", "*.mp4 *.avi *.mov *.mkv"), ("Tất cả file", "*.*")],
+        )
+        if not source:
+            return
+        out_dir = PREDICTIONS_OUTPUT_DIR / "videos"
+        target = filedialog.asksaveasfilename(
+            parent=self,
+            title="Lưu video kết quả",
+            initialdir=str(out_dir if out_dir.exists() else ROOT_DIR),
+            initialfile=f"{Path(source).stem}_ket_qua.mp4",
+            defaultextension=".mp4",
+            filetypes=[("MP4", "*.mp4")],
+        )
+        if not target:
+            return
+        if Path(target).resolve() == Path(source).resolve():
+            messagebox.showerror("Không lưu được video", "Hãy chọn file kết quả khác file video gốc.", parent=self)
+            return
+
+        self.clear_image()
+        revision = self._input_revision
+        self._video_running = True
+        self._video_stop.clear()
+        self.file_info.set(f"Video: {Path(source).name}  →  {Path(target).name}")
+        self.status.set("Đang mở video...")
         self._update_controls()
+        threading.Thread(
+            target=self._video_worker,
+            args=(self._model, source, target, float(self.confidence.get()), revision),
+            daemon=True,
+        ).start()
+
+    def _video_worker(self, model, source: str, target: str, confidence: float, revision: int):
+        last_sent = [0.0]
+
+        def on_frame(frame, annotated, detections, index, total):
+            now = time.monotonic()
+            if now - last_sent[0] >= 0.08 or index == total:
+                last_sent[0] = now
+                self._worker_events.put(("video_frame", revision, frame, annotated, detections, index, total))
+
+        try:
+            from src.predict_video import predict_video
+
+            summary = predict_video(
+                model, source, target, confidence, on_frame=on_frame, stop=self._video_stop.is_set
+            )
+            self._worker_events.put(("video_done", revision, summary))
+        except Exception as error:
+            self._worker_events.put(("video_error", revision, f"{type(error).__name__}: {error}"))
+
+    def _show_video_frame(self, revision, frame, annotated, detections, index, total):
+        if revision != self._input_revision:
+            return
+        self.original_panel.set_image(bgr_to_rgb_image(frame))
+        self.result_panel.set_image(bgr_to_rgb_image(annotated))
+        self._fill_results(detections)
+        if self._video_running:
+            self.status.set(f"Đang nhận diện video: khung {index}/{total or '?'}. Bấm Dừng video để dừng.")
+
+    def stop_video(self):
+        if self._video_running:
+            self._video_stop.set()
+            self.status.set("Đang dừng video, phần đã xử lý vẫn được lưu...")
+
+    def _finish_video(self, revision: int, summary: dict):
+        self._video_running = False
+        self._update_controls()
+        if revision != self._input_revision:
+            return
+        seen = ", ".join(f"{name} ({n} khung)" for name, n in summary["per_class"].items()) or "không có"
+        state = "Đã dừng" if summary["stopped"] else "Xong"
+        self.status.set(
+            f"{state}: {summary['frames']} khung, {summary['frames'] / max(summary['seconds'], 1e-6):.1f} khung/s. "
+            f"Biển xuất hiện: {seen}. Đã lưu: {summary['out_path']}"
+        )
+
+    def _fail_video(self, revision: int, error_message: str):
+        self._video_running = False
+        self._update_controls()
+        if revision != self._input_revision:
+            return
+        self.status.set(f"Không nhận diện được video: {error_message}")
+        messagebox.showerror("Không nhận diện được video", error_message, parent=self)
 
     def _fail_prediction(self, revision: int, error_message: str):
         self._predicting = False
@@ -524,6 +648,7 @@ class TrafficSignApp(tk.Tk):
         messagebox.showinfo("Đã lưu kết quả", f"Ảnh đã được lưu tại:\n{target}", parent=self)
 
     def close(self):
+        self._video_stop.set()
         self._closed = True
         self.destroy()
 

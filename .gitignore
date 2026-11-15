@@ -222,9 +222,12 @@ __marimo__/
 .venv/
 data/raw/
 data/processed/
+data/raw_ds2/
+data/raw_ds3/
 configs/data.yaml
 *.pt
 !models/best.pt
+!models/best_4lop.pt
 outputs/
 runs/
 .env
