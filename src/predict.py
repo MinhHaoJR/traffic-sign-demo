@@ -6,6 +6,8 @@
     annotated_bgr, detections = predict_frame(model, frame_bgr, 0.25)   # khung hình video
 
 detections: list dict {class_id, class_name, confidence, bbox=[x1, y1, x2, y2]}; rỗng nếu không có biển.
+Biển YOLO gán "Biển báo khác" được src.few_shot đặt tên theo ảnh mẫu (thêm few_shot=True),
+hoặc hiện là "Biển chưa biết" để người dùng dạy trong app.
 Lỗi file/model ném FileNotFoundError / ValueError để giao diện bắt và hiển thị.
 """
 import json
@@ -25,10 +27,11 @@ COLORS_BGR = {
     8: (19, 69, 139), 9: (147, 20, 255), 10: (0, 0, 139), 11: (205, 90, 106),
     12: (0, 165, 255), 13: (50, 205, 50), 14: (203, 192, 255), 15: (34, 139, 34),
     16: (60, 180, 230), 17: (139, 61, 72), 18: (255, 191, 0), 19: (0, 100, 0),
-    20: (230, 216, 173), 21: (42, 42, 165), 22: (0, 0, 255), 23: (122, 150, 233),
+    20: (230, 216, 173), 21: (42, 42, 165), 22: (0, 0, 255), 23: (122, 150, 233), 28: (128, 128, 128),
     24: (255, 0, 0), 25: (255, 255, 0), 26: (0, 255, 255), 27: (211, 0, 148),
 }
 _FONT_CANDIDATES = ["arial.ttf", "segoeui.ttf", "DejaVuSans.ttf"]  # cần font có dấu tiếng Việt
+OTHER_CONF = 0.10  # ngưỡng riêng cho "Biển báo khác" khi bật học nhanh
 
 
 @lru_cache(maxsize=1)
@@ -92,20 +95,40 @@ def predict_image(model, image_path, confidence: float = 0.25):
     return predict_frame(model, _read_bgr(image_path), confidence)
 
 
+@lru_cache(maxsize=1)
+def few_shot():
+    """Kho học nhanh (src.few_shot) nếu đã có bộ mã hóa và ảnh mẫu; None thì chỉ dùng YOLO."""
+    from src.paths import ENCODER_PATH, FEW_SHOT_PATH
+
+    if not (ENCODER_PATH.is_file() and FEW_SHOT_PATH.is_file()):
+        return None
+    from src.few_shot import FewShot
+
+    return FewShot()
+
+
 def predict_frame(model, img: np.ndarray, confidence: float = 0.25):
     """Như predict_image nhưng nhận sẵn ảnh BGR (một khung hình video)."""
     names = _class_names()
-    result = model.predict(source=img, conf=confidence, verbose=False)[0]
+    fs = few_shot()
+    oid = next((i for i, n in names.items() if n == "Biển báo khác"), None) if fs is not None else None
+    # Biển lạ thường được YOLO chấm điểm thấp: lớp "Biển báo khác" dùng ngưỡng riêng thấp hơn.
+    low = min(confidence, OTHER_CONF) if oid is not None else confidence
+    result = model.predict(source=img, conf=low, verbose=False)[0]
 
     detections = []
     for box in result.boxes:
         cid = int(box.cls[0].item())
+        if float(box.conf[0].item()) < confidence and cid != oid:
+            continue
         detections.append({
             "class_id": cid,
             "class_name": names.get(cid, f"Class {cid}"),
             "confidence": float(box.conf[0].item()),
             "bbox": [int(round(v)) for v in box.xyxy[0].tolist()],
         })
+    if fs is not None:
+        detections = fs.refine(img, detections, names)
     detections.sort(key=lambda d: d["confidence"], reverse=True)
     return _draw(img, detections), detections
 

@@ -24,6 +24,9 @@ LABELS_DIR = PROCESSED_DATA_DIR / "labels"
 # Thư mục mô hình
 MODELS_DIR = ROOT_DIR / "models"
 MODEL_PATH = MODELS_DIR / "best.pt"
+ENCODER_PATH = MODELS_DIR / "sign_encoder.pt"   # bộ mã hóa ảnh cắt cho học nhanh biển mới
+FEW_SHOT_PATH = MODELS_DIR / "few_shot.npz"     # ảnh mẫu (đã mã hóa) của mọi lớp
+FEEDBACK_DIR = DATA_DIR / "feedback"            # ảnh người dùng dạy, để train lại YOLO
 
 # Thư mục kết quả đầu ra
 OUTPUT_DIR = ROOT_DIR / "outputs"

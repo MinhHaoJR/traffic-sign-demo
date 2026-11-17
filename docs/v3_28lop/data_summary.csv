@@ -1,0 +1,90 @@
+split,class_id,class_name,num_objects
+train,0,Cấm đỗ xe,856
+train,1,Cấm dừng và đỗ xe,703
+train,2,Cấm rẽ trái,553
+train,3,Cấm rẽ phải,489
+train,4,Cấm đi ngược chiều,521
+train,5,Cấm quay đầu,78
+train,6,Cấm rẽ trái và quay đầu,150
+train,7,Cấm ô tô khách và ô tô tải,136
+train,8,Cấm xe hai và ba bánh,289
+train,9,Cấm mô tô và xe máy,33
+train,10,Dừng lại,301
+train,11,Phải đi vòng sang bên phải,323
+train,12,Đi chậm,265
+train,13,Giới hạn tốc độ 60 km/h,324
+train,14,Đường người đi bộ cắt ngang,193
+train,15,Giới hạn tốc độ 40 km/h,195
+train,16,Giao nhau với đường không ưu tiên,182
+train,17,Biển gộp làn đường theo phương tiện,206
+train,18,Bến xe buýt,139
+train,19,Giới hạn tốc độ 80 km/h,144
+train,20,Đường một chiều,134
+train,21,Chỗ ngoặt nguy hiểm vòng bên trái,142
+train,22,Cấm ô tô,488
+train,23,Cấm ô tô rẽ trái,141
+train,24,Hướng đi phải theo: rẽ phải,472
+train,25,Hướng đi phải theo: rẽ trái,475
+train,26,Trẻ em,486
+train,27,Giao nhau với đường ưu tiên,543
+val,0,Cấm đỗ xe,174
+val,1,Cấm dừng và đỗ xe,139
+val,2,Cấm rẽ trái,119
+val,3,Cấm rẽ phải,103
+val,4,Cấm đi ngược chiều,112
+val,5,Cấm quay đầu,25
+val,6,Cấm rẽ trái và quay đầu,31
+val,7,Cấm ô tô khách và ô tô tải,30
+val,8,Cấm xe hai và ba bánh,59
+val,9,Cấm mô tô và xe máy,11
+val,10,Dừng lại,64
+val,11,Phải đi vòng sang bên phải,73
+val,12,Đi chậm,89
+val,13,Giới hạn tốc độ 60 km/h,39
+val,14,Đường người đi bộ cắt ngang,82
+val,15,Giới hạn tốc độ 40 km/h,42
+val,16,Giao nhau với đường không ưu tiên,40
+val,17,Biển gộp làn đường theo phương tiện,41
+val,18,Bến xe buýt,54
+val,19,Giới hạn tốc độ 80 km/h,37
+val,20,Đường một chiều,30
+val,21,Chỗ ngoặt nguy hiểm vòng bên trái,20
+val,22,Cấm ô tô,100
+val,23,Cấm ô tô rẽ trái,45
+val,24,Hướng đi phải theo: rẽ phải,97
+val,25,Hướng đi phải theo: rẽ trái,91
+val,26,Trẻ em,101
+val,27,Giao nhau với đường ưu tiên,110
+test,0,Cấm đỗ xe,206
+test,1,Cấm dừng và đỗ xe,184
+test,2,Cấm rẽ trái,119
+test,3,Cấm rẽ phải,103
+test,4,Cấm đi ngược chiều,106
+test,5,Cấm quay đầu,13
+test,6,Cấm rẽ trái và quay đầu,50
+test,7,Cấm ô tô khách và ô tô tải,48
+test,8,Cấm xe hai và ba bánh,117
+test,9,Cấm mô tô và xe máy,3
+test,10,Dừng lại,66
+test,11,Phải đi vòng sang bên phải,58
+test,12,Đi chậm,35
+test,13,Giới hạn tốc độ 60 km/h,96
+test,14,Đường người đi bộ cắt ngang,37
+test,15,Giới hạn tốc độ 40 km/h,38
+test,16,Giao nhau với đường không ưu tiên,34
+test,17,Biển gộp làn đường theo phương tiện,57
+test,18,Bến xe buýt,20
+test,19,Giới hạn tốc độ 80 km/h,29
+test,20,Đường một chiều,31
+test,21,Chỗ ngoặt nguy hiểm vòng bên trái,20
+test,22,Cấm ô tô,112
+test,23,Cấm ô tô rẽ trái,25
+test,24,Hướng đi phải theo: rẽ phải,100
+test,25,Hướng đi phải theo: rẽ trái,100
+test,26,Trẻ em,113
+test,27,Giao nhau với đường ưu tiên,121
+
+split,unique_images,total_objects
+train,5403,8961
+val,1273,1958
+test,1210,2041

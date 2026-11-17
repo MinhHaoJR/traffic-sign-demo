@@ -4,7 +4,7 @@ train: images/train
 val: images/val
 test: images/test
 
-nc: 28
+nc: 29
 names:
   0: "Cấm đỗ xe"
   1: "Cấm dừng và đỗ xe"
@@ -34,3 +34,4 @@ names:
   25: "Hướng đi phải theo: rẽ trái"
   26: "Trẻ em"
   27: "Giao nhau với đường ưu tiên"
+  28: "Biển báo khác"

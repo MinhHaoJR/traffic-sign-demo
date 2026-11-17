@@ -32,21 +32,29 @@ if sys.platform == "win32":
 CLASS_NAMES = json.loads(CLASSES_PATH.read_text(encoding="utf-8"))
 CLASS_NAMES = {int(k): v for k, v in CLASS_NAMES.items()}
 
+OTHER_ID = next(i for i, n in CLASS_NAMES.items() if n == "Biển báo khác")
+# Biển ds3 bị loại hẳn khỏi dữ liệu (16 giới hạn chiều cao, 50 ngoặt phải) để thử tính năng học biển mới
+# trên biển model chưa từng thấy, kể cả dưới dạng "Biển báo khác".
+HOLDOUT_DS3 = {16, 50}
+
 # ID nguồn -> ID dự án. ID 0-3 giữ nguyên như bản 4 lớp.
 SOURCES = {
     "ds1": {
         "root": RAW_DATA_DIR / "data",
-        "map": {3: 0, 2: 1, 11: 2, 12: 3, 0: 4, 1: 10, 4: 22, 6: 23, 8: 24, 9: 25, 14: 26, 15: 27},
-        # 5/10 lẫn nhiều kiểu biển (có cả biển giống lớp 23-25), 13 là biển trẻ em kiểu châu Âu.
-        "skip": {5, 10, 13},
+        "map": {3: 0, 2: 1, 11: 2, 12: 3, 0: 4, 1: 10, 4: 22, 6: 23, 8: 24, 9: 25, 14: 26, 15: 27,
+                7: OTHER_ID, 10: OTHER_ID},
+        # 5 lẫn cả biển giống lớp 23, 13 là biển trẻ em kiểu châu Âu (giống lớp 26).
+        "skip": {5, 13},
     },
     "ds2": {
         "root": DATA_DIR / "raw_ds2" / "train_data",
-        "map": {1: 0, 2: 1, 3: 2, 4: 3, 0: 4, 5: 5, 6: 6, 8: 9, 22: 12, 24: 17},
+        "map": {1: 0, 2: 1, 3: 2, 4: 3, 0: 4, 5: 5, 6: 6, 8: 9, 22: 12, 24: 17,
+                13: OTHER_ID, 15: OTHER_ID, 21: OTHER_ID, 26: OTHER_ID, 27: OTHER_ID},
         # Nhãn gộp nhiều loại biển, có thể chứa lớp của dự án: 9/10 cấm ô tô/xe tải, 11 cấm khác,
         # 12 hiệu lệnh, 14 tốc độ, 18 giao nhau, 19 nguy hiểm, 20 người đi bộ, 23 cảnh báo khác,
         # 25 làn + tốc độ, 28 khác. Ảnh có các nhãn này bị bỏ để biển không thành nền chưa gán nhãn.
-        "skip": {9, 10, 11, 12, 14, 18, 19, 20, 23, 25, 28},
+        # 16 (giới hạn chiều cao) bị giữ lại để thử học biển mới (xem HOLDOUT).
+        "skip": {9, 10, 11, 12, 14, 16, 18, 19, 20, 23, 25, 28},
     },
     "ds3": {
         "root": DATA_DIR / "raw_ds3" / "archive",
@@ -54,9 +62,12 @@ SOURCES = {
                 # ID 11-21: biển có >= 13 nhóm 25 khung riêng biệt trong ds3
                 3: 11, 13: 12, 39: 13, 0: 14, 41: 15, 5: 16, 12: 17, 8: 18, 40: 19, 45: 20, 6: 21,
                 20: 22, 27: 26},  # ID 22-27 chủ yếu từ ds1, ds3 góp thêm Cấm ô tô và Trẻ em
-        "skip": set(),
+        "skip": set(HOLDOUT_DS3),
     },
 }
+# ds3 gán nhãn đủ 52 lớp: biển ngoài dự án thành "Biển báo khác" thay vì thành nền chưa gán nhãn.
+SOURCES["ds3"]["map"].update({c: OTHER_ID for c in range(52)
+                              if c not in SOURCES["ds3"]["map"] and c not in HOLDOUT_DS3})
 SPLIT_RATIOS = {"train": 0.70, "val": 0.15, "test": 0.15}
 
 

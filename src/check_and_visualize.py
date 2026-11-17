@@ -313,7 +313,9 @@ def generate_visual_samples(
             chosen_stems = rng.sample(available, min(samples_per_class, len(available)))
 
             for idx, stem in enumerate(chosen_stems):
-                img_path = next(img_dir.glob(f"{stem}.*"), None)
+                # bỏ file cache .npy do YOLO ghi cạnh ảnh khi train với --cache disk
+                img_path = next((p for p in img_dir.glob(f"{stem}.*")
+                                 if p.suffix.lower() in {".jpg", ".jpeg", ".png"}), None)
                 lbl_path = lbl_dir / f"{stem}.txt"
 
                 if img_path is None:

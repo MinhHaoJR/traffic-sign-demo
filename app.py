@@ -1,4 +1,4 @@
-"""Tkinter demo for detecting four Vietnamese traffic sign classes."""
+"""Tkinter demo nhận diện biển báo Việt Nam trên ảnh/video, có nút dạy biển mới (src.few_shot)."""
 
 from __future__ import annotations
 
@@ -51,6 +51,10 @@ class ImagePanel(ttk.Frame):
         self.photo: ImageTk.PhotoImage | None = None
         self.placeholder = placeholder
         self._resize_job = None
+        self.box: list[float] | None = None  # khung người dùng vẽ, theo tọa độ ảnh gốc
+        self._scale, self._offset = 1.0, (0.0, 0.0)
+        self._drag_start = None
+        self._on_box = None
 
         ttk.Label(self, text=title, style="CardTitle.TLabel").pack(anchor="w")
         self.canvas = tk.Canvas(
@@ -65,9 +69,44 @@ class ImagePanel(ttk.Frame):
 
     def set_image(self, image: Image.Image | None, placeholder: str | None = None):
         self.source = image
+        self.box = None
         if placeholder is not None:
             self.placeholder = placeholder
         self._render()
+
+    def enable_box_drawing(self, on_box):
+        """Kéo chuột trên ảnh để vẽ khung; on_box(box | None) nhận tọa độ [x1, y1, x2, y2] của ảnh gốc."""
+        self._on_box = on_box
+        self.canvas.bind("<ButtonPress-1>", self._drag_begin)
+        self.canvas.bind("<B1-Motion>", self._drag_move)
+        self.canvas.bind("<ButtonRelease-1>", self._drag_end)
+
+    def clear_box(self):
+        self.box = None
+        self.canvas.delete("drawn")
+
+    def _drag_begin(self, event):
+        if self.source is not None:
+            self._drag_start = (event.x, event.y)
+
+    def _drag_move(self, event):
+        if self._drag_start is None:
+            return
+        self.canvas.delete("drawn")
+        self.canvas.create_rectangle(*self._drag_start, event.x, event.y, outline="#f97316", width=2, tags="drawn")
+
+    def _drag_end(self, event):
+        if self._drag_start is None:
+            return
+        (x0, y0), self._drag_start = self._drag_start, None
+        ox, oy = self._offset
+        w, h = self.source.size
+        xs = sorted(min(max((x - ox) / self._scale, 0), w) for x in (x0, event.x))
+        ys = sorted(min(max((y - oy) / self._scale, 0), h) for y in (y0, event.y))
+        self.box = [xs[0], ys[0], xs[1], ys[1]] if xs[1] - xs[0] >= 8 and ys[1] - ys[0] >= 8 else None
+        self._render()
+        if self._on_box:
+            self._on_box(self.box)
 
     def _schedule_render(self, _event=None):
         if self._resize_job is not None:
@@ -99,6 +138,43 @@ class ImagePanel(ttk.Frame):
         )
         self.photo = ImageTk.PhotoImage(preview, master=self.canvas)
         self.canvas.create_image(width / 2, height / 2, image=self.photo)
+        self._scale = preview.width / self.source.width
+        self._offset = (width / 2 - preview.width / 2, height / 2 - preview.height / 2)
+        if self.box is not None:
+            ox, oy = self._offset
+            x1, y1, x2, y2 = (v * self._scale for v in self.box)
+            self.canvas.create_rectangle(x1 + ox, y1 + oy, x2 + ox, y2 + oy, outline="#f97316", width=2, tags="drawn")
+
+
+def ask_sign_name(parent, choices: list[str], initial: str = "") -> str | None:
+    """Hộp thoại chọn tên có sẵn hoặc gõ tên biển mới; trả None nếu hủy."""
+    dialog = tk.Toplevel(parent)
+    dialog.title("Đặt tên biển báo")
+    dialog.transient(parent)
+    dialog.resizable(False, False)
+    frame = ttk.Frame(dialog, padding=16)
+    frame.pack(fill="both", expand=True)
+    ttk.Label(frame, text="Chọn tên có sẵn hoặc gõ tên biển mới:").pack(anchor="w")
+    value = tk.StringVar(value=initial)
+    box = ttk.Combobox(frame, textvariable=value, values=choices, width=46)
+    box.pack(fill="x", pady=(6, 12))
+    result: list[str | None] = [None]
+
+    def accept(_event=None):
+        if value.get().strip():
+            result[0] = value.get().strip()
+            dialog.destroy()
+
+    buttons = ttk.Frame(frame)
+    buttons.pack(anchor="e")
+    ttk.Button(buttons, text="Hủy", command=dialog.destroy).pack(side="right")
+    ttk.Button(buttons, text="Học biển này", command=accept).pack(side="right", padx=(0, 8))
+    dialog.bind("<Return>", accept)
+    dialog.bind("<Escape>", lambda _e: dialog.destroy())
+    box.focus_set()
+    dialog.grab_set()
+    parent.wait_window(dialog)
+    return result[0]
 
 
 class TrafficSignApp(tk.Tk):
@@ -119,6 +195,9 @@ class TrafficSignApp(tk.Tk):
         self._model_state = "loading"
         self._model_error = ""
         self._predicting = False
+        self._teaching = False
+        self._teach_note = ""
+        self._detections: list = []  # kết quả ảnh hiện tại, theo thứ tự hàng trong bảng
         self._video_running = False
         self._video_stop = threading.Event()
         self._input_revision = 0
@@ -168,7 +247,7 @@ class TrafficSignApp(tk.Tk):
         ).grid(row=0, column=0, sticky="w")
         ttk.Label(
             body,
-            text="Demo nhận diện 28 loại biển báo (cấm, tốc độ, nguy hiểm, chỉ dẫn) trên ảnh và video bằng YOLO11n.",
+            text="Nhận diện 28 loại biển báo trên ảnh và video bằng YOLO11n; biển lạ có thể dạy cho hệ thống học ngay.",
             style="Muted.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(3, 12))
 
@@ -249,12 +328,25 @@ class TrafficSignApp(tk.Tk):
             "Kết quả sẽ xuất hiện sau khi nhận diện.",
         )
         self.result_panel.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        # vẽ trên ảnh kết quả: cùng hệ tọa độ với ảnh model xử lý (ảnh gốc hiển thị đã xoay theo EXIF)
+        self.result_panel.enable_box_drawing(lambda _box: self._update_controls())
 
+        list_header = ttk.Frame(body)
+        list_header.grid(row=5, column=0, sticky="ew", pady=(12, 6))
         ttk.Label(
-            body,
+            list_header,
             text="Danh sách biển báo",
             font=("Segoe UI", 11, "bold"),
-        ).grid(row=5, column=0, sticky="w", pady=(12, 6))
+        ).pack(side="left")
+        self.teach_button = ttk.Button(
+            list_header, text="Đặt tên biển…", command=self.teach_selected, state="disabled"
+        )
+        self.teach_button.pack(side="right")
+        ttk.Label(
+            list_header,
+            text="Chọn một hàng, hoặc kéo chuột khoanh biển bị bỏ sót trên Ảnh kết quả, rồi đặt tên để hệ thống học.",
+            style="Muted.TLabel",
+        ).pack(side="right", padx=(0, 10))
         self.results = ttk.Treeview(
             body,
             columns=("class_name", "confidence", "bbox"),
@@ -268,6 +360,7 @@ class TrafficSignApp(tk.Tk):
         self.results.column("confidence", width=130, minwidth=100, anchor="center")
         self.results.column("bbox", width=330, minwidth=200, anchor="center")
         self.results.grid(row=6, column=0, sticky="ew")
+        self.results.bind("<<TreeviewSelect>>", lambda _e: self._update_controls())
 
         ttk.Label(
             body,
@@ -332,6 +425,8 @@ class TrafficSignApp(tk.Tk):
                 self._finish_prediction(*payload)
             elif kind == "prediction_error":
                 self._fail_prediction(*payload)
+            elif kind == "teach_done":
+                self._finish_teach(*payload)
         if latest_frame is not None:
             self._show_video_frame(*latest_frame)
         self.after(80, self._process_worker_events)
@@ -355,6 +450,9 @@ class TrafficSignApp(tk.Tk):
         )
         self.stop_button.configure(state="normal" if video else "disabled")
         self.confidence_scale.state(["disabled"] if video else ["!disabled"])
+        can_teach = (has_current_result and not video and not self._predicting and not self._teaching
+                     and (bool(self.results.selection()) or self.result_panel.box is not None))
+        self.teach_button.configure(state="normal" if can_teach else "disabled")
 
     def choose_image(self):
         filename = filedialog.askopenfilename(
@@ -412,6 +510,7 @@ class TrafficSignApp(tk.Tk):
         self._result_revision = None
         self.result_panel.set_image(None, "Kết quả sẽ xuất hiện sau khi nhận diện.")
         self.results.delete(*self.results.get_children())
+        self._detections = []
         self._update_controls()
 
     def _confidence_changed(self, value):
@@ -480,13 +579,17 @@ class TrafficSignApp(tk.Tk):
         self._fill_results(detections)
 
         if detections:
-            self.status.set(f"Đã phát hiện {len(detections)} biển báo.")
+            unknown = sum(d.get("class_name") == "Biển chưa biết" for d in detections)
+            hint = f" Có {unknown} biển chưa biết: chọn hàng và bấm Đặt tên biển để dạy." if unknown else ""
+            self.status.set(f"Đã phát hiện {len(detections)} biển báo.{hint}{self._teach_note}")
         else:
-            self.status.set("Không phát hiện biển báo thuộc bốn lớp hỗ trợ trong ảnh này.")
+            self.status.set(f"Không phát hiện biển báo nào trong ảnh này.{self._teach_note}")
+        self._teach_note = ""
         self._update_controls()
 
     def _fill_results(self, detections: list):
         self.results.delete(*self.results.get_children())
+        self._detections = list(detections)
         for detection in detections:
             bbox = detection.get("bbox", [])
             bbox_text = ", ".join(str(int(value)) for value in bbox)
@@ -494,11 +597,72 @@ class TrafficSignApp(tk.Tk):
                 "",
                 "end",
                 values=(
-                    detection.get("class_name", "Không rõ"),
+                    detection.get("class_name", "Không rõ") + (" (học nhanh)" if detection.get("few_shot") else ""),
                     f"{float(detection.get('confidence', 0.0)):.2f}",
                     f"[{bbox_text}]",
                 ),
             )
+
+    def teach_selected(self):
+        """Đặt tên cho biển đang chọn: học nhanh ngay + lưu vào kho phản hồi để train lại sau."""
+        if self.selected_path is None or self._teaching:
+            return
+        from src.few_shot import OTHER_NAME, UNKNOWN_NAME, load_classes
+
+        drawn = self.result_panel.box
+        selection = self.results.selection()
+        if drawn is not None:  # khung tự vẽ được ưu tiên hơn hàng đang chọn
+            bbox, current, others = [int(round(v)) for v in drawn], "", list(self._detections)
+        elif selection and self.results.index(selection[0]) < len(self._detections):
+            index = self.results.index(selection[0])
+            bbox, current = self._detections[index]["bbox"], self._detections[index].get("class_name", "")
+            others = [d for i, d in enumerate(self._detections) if i != index]
+        else:
+            return
+        choices = [n for n in load_classes().values() if n != OTHER_NAME]
+        name = ask_sign_name(self, choices, "" if current == UNKNOWN_NAME else current)
+        if not name:
+            return
+        self._teaching = True
+        self.status.set(f"Đang học biển \"{name}\"...")
+        self._update_controls()
+        threading.Thread(
+            target=self._teach_worker,
+            args=(self.selected_path, bbox, name, others, self._input_revision),
+            daemon=True,
+        ).start()
+
+    def _teach_worker(self, path: Path, bbox, name: str, others: list, revision: int):
+        try:
+            from src.few_shot import add_class, feedback_counts
+            from src.predict import _read_bgr, few_shot
+
+            store = few_shot()
+            if store is None:
+                raise FileNotFoundError(
+                    "Chưa có bộ học nhanh (models/sign_encoder.pt, models/few_shot.npz). Xem README mục 7."
+                )
+            class_id = add_class(name)
+            saved = store.teach(_read_bgr(path), bbox, class_id, others)
+            count = feedback_counts().get(class_id, 0)
+            self._worker_events.put(("teach_done", revision, name, count, str(saved), None))
+        except Exception as error:
+            self._worker_events.put(("teach_done", revision, name, 0, "", f"{type(error).__name__}: {error}"))
+
+    def _finish_teach(self, revision: int, name: str, count: int, saved: str, error: str | None):
+        self._teaching = False
+        self._update_controls()
+        if error:
+            self.status.set(f"Không học được biển: {error}")
+            messagebox.showerror("Không học được biển", error, parent=self)
+            return
+        self._teach_note = (
+            f" Đã học biển \"{name}\" ({count} ảnh trong kho phản hồi). Dạy thêm ảnh khác của biển này để "
+            "nhận chắc hơn; đủ khoảng 30 ảnh thì chạy python -m src.learn_new để train lại model."
+        )
+        self.status.set(self._teach_note.strip())
+        if revision == self._input_revision and self.selected_path is not None:
+            self.detect_image()  # nhận diện lại để thấy tên vừa dạy; ghi chú được nối vào trạng thái kết quả
 
     def choose_video(self):
         if self._model_state != "ready" or self._predicting or self._video_running:

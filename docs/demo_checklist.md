@@ -1,6 +1,6 @@
 # Kiểm thử ứng dụng Tkinter của Hảo
 
-Dùng checklist này để xác nhận luồng chọn ảnh, nhận diện, hiển thị và lưu ảnh trước buổi demo. Ghi lại lỗi kèm bước tái hiện và kết quả sau khi sửa.
+Dùng checklist này để xác nhận luồng chọn ảnh, nhận diện, hiển thị, lưu ảnh và dạy biển mới trước buổi demo. Ghi lại lỗi kèm bước tái hiện và kết quả sau khi sửa.
 
 ## Kiểm tra chức năng
 
@@ -21,6 +21,11 @@ Dùng checklist này để xác nhận luồng chọn ảnh, nhận diện, hi�
 | Lỗi khi lưu | Chọn vị trí không có quyền ghi | Báo lỗi; ứng dụng tiếp tục hoạt động | [x] |
 | Giao diện không bị đơ | Nhận diện ảnh lớn và kéo/đổi ảnh trong lúc chạy | Cửa sổ vẫn phản hồi; kết quả cũ không ghi đè kết quả hiện tại | [x] |
 | Đổi kích thước cửa sổ | Chọn ảnh ngang và ảnh dọc, co giãn cửa sổ | Ảnh không méo hoặc bị cắt khỏi khung xem | [x] |
+| Biển chưa biết | Nhận diện ảnh có biển ngoài 28 lớp | Biển được khoanh và ghi "Biển chưa biết"; trạng thái nhắc chọn hàng để dạy | [x] |
+| Dạy biển từ hàng trong bảng | Chọn hàng "Biển chưa biết", bấm Đặt tên biển, nhập tên mới, bấm Học biển này | Lớp mới thêm vào `configs/classes.json`; ảnh + nhãn lưu vào `data/feedback`; ảnh được nhận diện lại và hiện tên vừa dạy kèm "(học nhanh)" | [x] |
+| Dạy biển bằng khung tự vẽ | Kéo chuột vẽ khung quanh biển trên Ảnh kết quả rồi bấm Đặt tên biển | Khung vẽ đúng tọa độ ảnh; dạy xong khung được xóa | [x] |
+| Tên trùng | Dạy với tên đã có nhưng khác hoa/thường | Dùng lại lớp cũ, không tạo lớp mới | [x] |
+| Hủy dạy | Mở hộp thoại Đặt tên biển rồi bấm Hủy | Không thay đổi gì | [x] |
 
 ## Kiểm tra bàn giao
 
@@ -75,6 +80,27 @@ Với model thật, `python -m src.predict_video` trên video thử 100 khung (g
 Model `run_28lop_50ep`. Kiểm định dữ liệu gộp: 7.886 ảnh, 12.960 khung, 0 nhãn hỏng, 0 cặp ảnh/nhãn lệch. Test mAP@0.5 0,867 (1.210 ảnh).
 
 `python -m src.predict_video` trên video thử 142 khung (ghép 6 cụm khung test của ds3 có nhiều lớp mới): 7,7 s (18,5 khung/s, GPU), 139 khung có biển, 18 lớp xuất hiện. Có nhận nhầm giữa các biển tam giác cảnh báo. Luồng video trong app chưa chạy lại với model 28 lớp (code app không đổi ngoài dòng mô tả).
+
+### Đợt kiểm thử 2026-11-18 (bản 29 lớp + học biển mới)
+
+Model `run_29lop_50ep` (train lại từ `yolo11n.pt`). Kiểm định dữ liệu gộp: 7.926 ảnh, 13.752 khung, 0 nhãn hỏng, 0 cặp ảnh/nhãn lệch. Test mAP@0.5 0,901 (1.197 ảnh).
+
+Luồng dạy biển trong app được kiểm bằng script điều khiển `TrafficSignApp` thật (model, bộ mã hóa, luồng nền đều thật; chỉ hộp thoại đặt tên được giả lập; `classes.json` và `few_shot.npz` được sao lưu và khôi phục). Kết quả 10/11 đạt:
+
+- Nút Đặt tên biển tắt khi chưa chọn gì, bật khi chọn hàng hoặc vẽ khung. Khung vẽ lệch 0,8 px so với khung thật (tỉ lệ hiển thị 0,66).
+- Dạy "Chỗ ngoặt nguy hiểm vòng bên phải" bằng khung tự vẽ: lớp 29 được thêm, nhãn lưu vào `data/feedback/labels/train/`, khung vẽ được xóa. Tên trùng khác hoa/thường không tạo lớp mới; Hủy không học gì.
+- **Không đạt (giới hạn đã biết):** nhận diện lại ảnh vừa dạy chưa hiện tên mới, vì YOLO không khoanh được biển đó trong ảnh này (biển rất nhỏ). Học nhanh chỉ đặt tên cho biển YOLO đã khoanh; biển YOLO bỏ sót cần dạy thêm ảnh rồi chạy `python -m src.learn_new`.
+
+Phép thử học biển mới (2 biển ds3 bị loại hẳn khỏi dữ liệu train, 40 ảnh hỏi mỗi biển, chạy qua đúng code của app):
+
+| Biển | YOLO khoanh được | Dạy | Gọi đúng tên sau khi dạy |
+| --- | :-: | :-: | :-: |
+| Giới hạn chiều cao | 19/40 | 5 ảnh | 12/19 |
+| Chỗ ngoặt nguy hiểm vòng bên phải | 31/40 | 10 ảnh (1 ảnh tự vẽ khung) | 31/31 |
+
+Trên 300 ảnh test của 28 lớp cũ: 1/575 khung bị gán nhầm thành biển vừa dạy.
+
+Chưa chạy lại video với model 29 lớp.
 
 ## Nhật ký lỗi
 

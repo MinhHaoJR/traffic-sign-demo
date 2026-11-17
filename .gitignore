@@ -232,3 +232,5 @@ outputs/
 runs/
 .env
 ~$*
+!models/sign_encoder.pt
+configs/data_learn.yaml
