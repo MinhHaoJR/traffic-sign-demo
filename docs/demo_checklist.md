@@ -102,6 +102,22 @@ Trên 300 ảnh test của 28 lớp cũ: 1/575 khung bị gán nhầm thành bi�
 
 Chưa chạy lại video với model 29 lớp.
 
+### Đợt kiểm thử 2026-11-18 (ảnh biển cận cảnh)
+
+Ảnh người dùng gửi (357×205, ba biển chụp rất gần, hai biển bị cắt ở mép):
+
+| Biển | Model `run_29lop_50ep` | Model `run_29lop_closeup_ft30` |
+| --- | --- | --- |
+| Cấm đỗ xe (bị cắt nửa) | bỏ sót | Cấm đỗ xe 0,92 |
+| Giới hạn tốc độ 50 km/h (không thuộc 28 lớp) | Cấm rẽ trái 0,89 | Giới hạn tốc độ 40 km/h 0,34 |
+| Cấm xích lô và xe ba bánh (không thuộc 28 lớp) | bỏ sót | Cấm ô tô 0,30 |
+
+Model mới khoanh được cả ba biển; hai biển ngoài 28 lớp vẫn bị gán sang lớp gần giống, chọn hàng và Đặt tên biển để sửa. Bộ test cận cảnh 842 ảnh: mAP@0.5 0,332 → 0,958; test thường 0,901 → 0,908.
+
+Phép thử học biển mới với model mới: Giới hạn chiều cao gọi đúng 12/16 khung YOLO khoanh được, ngoặt phải 29/32; 1/574 khung lớp cũ bị gán nhầm thành biển vừa dạy.
+
+Đã thử và bỏ: giữ lại khung YOLO điểm thấp khi bộ mã hóa thấy rất giống một lớp. Trên val, bộ lọc tốt nhất chỉ nâng F1 từ 0,864 lên 0,868, cứu được bao nhiêu biển thì thêm gần bấy nhiêu khung sai (nhiều khung là vòm gạch giống ảnh nền của lớp "rẽ phải"), và không cứu được biển nào trong ảnh trên.
+
 ## Nhật ký lỗi
 
 | Ngày | Bước tái hiện | Lỗi quan sát được | Cách sửa | Kết quả kiểm tra lại |

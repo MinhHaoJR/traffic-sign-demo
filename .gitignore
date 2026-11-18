@@ -224,6 +224,7 @@ data/raw/
 data/processed/
 data/raw_ds2/
 data/raw_ds3/
+data/feedback/
 configs/data.yaml
 *.pt
 !models/best.pt

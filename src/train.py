@@ -99,6 +99,12 @@ def main():
             exist_ok=True,
         )
     minutes = (time.time() - start) / 60
+    if a.resume:  # lấy cấu hình thật của lần chạy, không dùng giá trị mặc định của dòng lệnh
+        import yaml
+
+        cfg = yaml.safe_load((Path(results.save_dir) / "args.yaml").read_text(encoding="utf-8"))
+        a.imgsz, a.epochs, a.batch, a.seed = (cfg[k] for k in ("imgsz", "epochs", "batch", "seed"))
+        a.model = "chạy tiếp từ last.pt"  # args.yaml đã bị ghi đè bằng last.pt, không còn trọng số khởi đầu
 
     best = Path(results.save_dir) / "weights" / "best.pt"
     m = results.results_dict  # chỉ số trên tập VAL của epoch tốt nhất

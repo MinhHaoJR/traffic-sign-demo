@@ -10,7 +10,7 @@
 * **Phạm vi:** **28 loại biển báo** gồm biển cấm, giới hạn tốc độ, biển nguy hiểm, hiệu lệnh và chỉ dẫn, cộng lớp "Biển báo khác" để khoanh các biển chưa có tên (danh sách ở [mục 4](#4-28-lớp-biển-báo)).
 * **Học biển mới:** biển lạ hiện là "Biển chưa biết"; người dùng đặt tên một lần là app nhận ra biển đó ở ảnh sau, và có thể train lại YOLO với các biển đã dạy (chi tiết ở [mục 7](#7-học-biển-mới)).
 * **Dữ liệu:** gộp 3 bộ dữ liệu công khai thành 7.926 ảnh, 13.752 biển (chi tiết ở [mục 5](#5-dữ-liệu)).
-* **Kết quả trên tập test** (1.197 ảnh, 2.219 biển): Precision 0,887 · Recall 0,850 · **mAP@0.5 0,901** · mAP@0.5:0.95 0,718.
+* **Kết quả trên tập test** (1.197 ảnh, 2.219 biển): Precision 0,885 · Recall 0,850 · **mAP@0.5 0,908** · mAP@0.5:0.95 0,717. Trên 842 ảnh biển cận cảnh (biển to, có thể bị cắt ở mép): mAP@0.5 0,958.
 * **Các phiên bản model:**
 
   | Bản | Số lớp | Trọng số | Số liệu |
@@ -50,6 +50,7 @@ traffic-sign-demo/
 │   ├── evaluate.py             # Đánh giá trên tập test, ghi docs/test_metrics.csv
 │   ├── predict.py              # Nhận diện ảnh: load_model, predict_image, predict_frame
 │   ├── predict_video.py        # Nhận diện video, ghi MP4
+│   ├── closeups.py             # Ảnh biển cận cảnh cho train và bộ test cận cảnh
 │   ├── few_shot.py             # Học nhanh biển mới: bộ mã hóa ảnh cắt, ảnh mẫu, kho phản hồi
 │   └── learn_new.py            # Train lại YOLO với các biển đã dạy
 ├── models/
@@ -168,6 +169,7 @@ Giải nén 3 bộ dữ liệu vào `data/` (không đưa lên Git):
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.prepare_merged        # ghi data/processed, docs/data_summary.csv, docs/split_manifest.csv, configs/*.yaml
+.\.venv\Scripts\python.exe -m src.closeups build        # thêm ảnh cận cảnh (chạy sau prepare_merged)
 .\.venv\Scripts\python.exe -m src.check_and_visualize   # kiểm định nhãn, ảnh lưới ở outputs/label_verification/
 ```
 
@@ -188,6 +190,11 @@ Hai lớp ds3 "Giới hạn chiều cao" và "Chỗ ngoặt nguy hiểm vòng b�
 | Val | 1.332 | 1.972 |
 | Test | 1.197 | 2.219 |
 
+**Ảnh cận cảnh** (`src/closeups.py`): dữ liệu gốc gần như toàn biển nhỏ ở xa, nên model cũ bỏ sót hoặc gọi sai biển chụp gần (mAP@0.5 0,33 trên ảnh cận cảnh). `src.closeups build` cắt phóng to quanh các biển có cạnh ≥ 32 px để biển chiếm 30–75% khung, có lúc lệch hẳn ra mép (biển bị cắt, chỉ cần lộ ≥ 60%). Biển khác chỉ lộ dưới 50% trong khung cắt được tô xám để không thành biển chưa gán nhãn.
+* Train: thêm 2.005 ảnh `cu_*` (tối đa 80 mỗi lớp), chỉ cắt từ ảnh train.
+* Bộ test cận cảnh: 842 ảnh trong `data/processed/images/closeup_test/` (tối đa 40 mỗi lớp), chỉ cắt từ ảnh test, dùng để đo bằng `src.closeups eval`.
+* Val và test gốc không đổi. Chạy lại `prepare_merged` sẽ xóa ảnh cận cảnh, nên chạy lại `closeups build` sau đó.
+
 Kiểm định: 0 nhãn sai định dạng, 0 ảnh thiếu nhãn hoặc nhãn thiếu ảnh. `src.prepare_data` (bộ 4 lớp ban đầu) ghi vào cùng `data/processed`, nên chạy nó sẽ thay bộ 29 lớp.
 
 ---
@@ -199,28 +206,38 @@ Cài PyTorch bản CUDA vào `.venv` để train trên GPU NVIDIA, rồi train v
 ```powershell
 .\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu126
 .\.venv\Scripts\python.exe -m src.train --epochs 50 --imgsz 640 --batch 16 --device 0 --workers 0 --cache disk --name run_29lop_50ep --save-model
+.\.venv\Scripts\python.exe -m src.closeups build
+.\.venv\Scripts\python.exe -m src.train --model models/best.pt --epochs 30 --imgsz 640 --batch 16 --device 0 --workers 0 --cache disk --name run_29lop_closeup_ft30 --save-model
 .\.venv\Scripts\python.exe -m src.evaluate --imgsz 640 --device 0 --examples
+.\.venv\Scripts\python.exe -m src.closeups eval --device 0
 ```
 
 * `fliplr=0` được đặt sẵn trong `src/train.py`: lật ngang sẽ đổi biển rẽ trái thành rẽ phải.
 * `--workers 0` là cố ý. Trên Windows mỗi worker nạp lại thư viện CUDA (khoảng 1,4 GB bộ nhớ ảo), nên máy 16 GB RAM bị lỗi `WinError 1455` khi dùng 4 worker. `--cache disk` lưu ảnh đã giải mã thành `.npy` để không chiếm RAM.
 * `--save-model` chép trọng số tốt nhất (chọn theo tập val) vào `models/best.pt`. Mỗi lần train thêm một dòng vào `docs/experiment_log.csv`.
 * Khi tập chia train/val/test thay đổi (ví dụ thêm lớp), train lại từ `yolo11n.pt`. Train tiếp từ model cũ làm điểm test bị rò rỉ, vì model cũ đã thấy một phần ảnh của tập test mới.
+* Thêm ảnh cận cảnh không đổi tập chia val/test, nên được train tiếp từ model 50 epoch. Bị ngắt giữa chừng thì chạy lại lệnh với `--resume --name <tên lần chạy>`.
 * `--imgsz` khi đánh giá phải trùng lúc train. `evaluate.py` ghi đè `docs/test_metrics.csv` và lưu ảnh ví dụ đúng / sai / bỏ sót vào `outputs/predictions/examples/`.
 
-Lần train hiện tại (`run_29lop_50ep`) chạy trên RTX 4050 Laptop, mất 179 phút.
+Model hiện tại (`run_29lop_closeup_ft30`) gồm 50 epoch từ `yolo11n.pt` (179 phút) và 30 epoch train tiếp có ảnh cận cảnh (khoảng 108 phút), trên RTX 4050 Laptop.
 
 **Kết quả:**
-* 18/29 lớp đạt mAP@0.5 ≥ 0,9 trên tập test; trung bình 28 lớp có tên là 0,908.
+
+| Model | Test thường mAP@0.5 | Test cận cảnh mAP@0.5 |
+| --- | :-: | :-: |
+| 50 epoch, chưa có ảnh cận cảnh | 0,901 | 0,332 |
+| Hiện tại (thêm ảnh cận cảnh) | **0,908** | **0,958** |
+
+* 19/29 lớp đạt mAP@0.5 ≥ 0,9 trên tập test; trung bình 28 lớp có tên là 0,912.
 * Lớp yếu nhất:
 
   | Lớp | mAP@0.5 |
   | --- | :-: |
-  | Cấm quay đầu | 0,56 |
-  | Biển báo khác | 0,70 |
-  | Đường một chiều | 0,71 |
-  | Tốc độ 60 km/h | 0,75 |
-  | Bến xe buýt | 0,76 |
+  | Đường một chiều | 0,65 |
+  | Giao nhau với đường không ưu tiên | 0,70 |
+  | Bến xe buýt | 0,71 |
+  | Chỗ ngoặt nguy hiểm vòng bên trái | 0,75 |
+  | Biển báo khác | 0,78 |
 
   Các lớp ds3 lấy từ video, nên tập train chỉ có ít biển thật lặp lại qua nhiều khung hình. "Biển báo khác" gom nhiều kiểu biển nên khó hơn lớp thường.
 * "Cấm mô tô và xe máy" (3 đối tượng test), "Bến xe buýt" (20) và "Cấm quay đầu" (25) có ít mẫu nên điểm không ổn định.
@@ -263,10 +280,10 @@ Bộ mã hóa được train một lần trên ảnh cắt của cả 3 bộ d�
 
 | Biển | YOLO khoanh được | Số ảnh dạy | Gọi đúng tên sau khi dạy |
 | --- | :-: | :-: | :-: |
-| Giới hạn chiều cao | 19/40 | 5 | 12/19 |
-| Chỗ ngoặt nguy hiểm vòng bên phải | 31/40 | 10 | 31/31 |
+| Giới hạn chiều cao | 16/40 | 5 | 12/16 |
+| Chỗ ngoặt nguy hiểm vòng bên phải | 32/40 | 10 | 29/32 |
 
-Trên 300 ảnh test của các lớp cũ, chỉ 1/575 khung bị gán nhầm thành biển vừa dạy.
+Trên 300 ảnh test của các lớp cũ, chỉ 1/574 khung bị gán nhầm thành biển vừa dạy.
 
 **Giới hạn:**
 * Học nhanh chỉ đặt tên cho biển YOLO đã khoanh. Biển YOLO bỏ sót (thường là biển rất nhỏ) vẫn cần vẽ khung để dạy, nhưng chỉ được nhận ra tự động sau khi chạy `learn_new`.
@@ -298,7 +315,8 @@ Trên 300 ảnh test của các lớp cũ, chỉ 1/575 khung bị gán nhầm th
 * **Chương kết quả mô hình:**
   * Bảng điểm: [`docs/test_metrics.csv`](docs/test_metrics.csv), [`models/README.md`](models/README.md).
   * Nhật ký train: [`docs/experiment_log.csv`](docs/experiment_log.csv).
-  * Biểu đồ loss/mAP: `outputs/training/run_29lop_50ep/`.
+  * Biểu đồ loss/mAP: `outputs/training/run_29lop_50ep/` và `outputs/training/run_29lop_closeup_ft30/`.
+  * Ảnh cận cảnh: [mục 5](#5-dữ-liệu), kết quả ở [mục 6](#6-huấn-luyện-và-đánh-giá).
 * **Hình đã chọn trong [`docs/figures/`](docs/figures):**
 
   | Hình | Nội dung |
@@ -320,6 +338,7 @@ Trên 300 ảnh test của các lớp cũ, chỉ 1/575 khung bị gán nhầm th
 
 - [x] Dữ liệu 29 lớp gộp từ 3 bộ, kiểm định nhãn đạt.
 - [x] Model 29 lớp, đánh giá trên tập test, ghi số liệu.
+- [x] Ảnh biển cận cảnh: thêm vào train, đo trên bộ test cận cảnh (mAP@0.5 0,33 → 0,96).
 - [x] Học biển mới: dạy trong app, học nhanh, train lại YOLO bằng `src.learn_new` (đã chạy thử 1 epoch trên bản sao).
 - [x] Giao diện nhận diện ảnh và video; lệnh `src.predict`, `src.predict_video`.
 - [x] Thực nghiệm OpenCV 5 trường hợp.
