@@ -200,6 +200,10 @@ class TrafficSignApp(tk.Tk):
         self._detections: list = []  # kết quả ảnh hiện tại, theo thứ tự hàng trong bảng
         self._video_running = False
         self._video_stop = threading.Event()
+        self._video_resume = threading.Event()  # set = chạy, clear = đang xin tạm dừng (luồng video chặn chờ)
+        self._video_resume.set()
+        self._paused: tuple[Image.Image, str] | None = None  # (khung đang dừng, tên gợi ý) khi đã tạm dừng thật
+        self._video_stem = ""
         self._input_revision = 0
         self._result_revision: int | None = None
         self._closed = False
@@ -261,6 +265,10 @@ class TrafficSignApp(tk.Tk):
             controls, text="Chọn video", command=self.choose_video, state="disabled"
         )
         self.video_button.pack(side="left", padx=(8, 0))
+        self.pause_button = ttk.Button(
+            controls, text="Tạm dừng", command=self.toggle_pause, state="disabled"
+        )
+        self.pause_button.pack(side="left", padx=(8, 0))
         self.stop_button = ttk.Button(
             controls, text="Dừng video", command=self.stop_video, state="disabled"
         )
@@ -442,13 +450,19 @@ class TrafficSignApp(tk.Tk):
             self.annotated_image is not None
             and self._result_revision == self._input_revision
         )
-        self.save_button.configure(state="normal" if has_current_result and not video else "disabled")
+        paused = self._paused is not None
+        self.save_button.configure(state="normal" if (has_current_result and not video) or paused else "disabled")
         self.clear_button.configure(state="normal" if has_image and not video else "disabled")
         self.choose_button.configure(state="disabled" if video else "normal")
         self.video_button.configure(
             state="normal" if model_ready and not self._predicting and not video else "disabled"
         )
         self.stop_button.configure(state="normal" if video else "disabled")
+        pausing = not paused and not self._video_resume.is_set()  # đã bấm Tạm dừng, luồng chưa dừng hẳn
+        self.pause_button.configure(
+            text="Chạy tiếp" if paused else "Tạm dừng",
+            state="normal" if video and not pausing and not self._video_stop.is_set() else "disabled",
+        )
         self.confidence_scale.state(["disabled"] if video else ["!disabled"])
         can_teach = (has_current_result and not video and not self._predicting and not self._teaching
                      and (bool(self.results.selection()) or self.result_panel.box is not None))
@@ -693,6 +707,8 @@ class TrafficSignApp(tk.Tk):
         revision = self._input_revision
         self._video_running = True
         self._video_stop.clear()
+        self._reset_pause()
+        self._video_stem = Path(source).stem
         self.file_info.set(f"Video: {Path(source).name}  →  {Path(target).name}")
         self.status.set("Đang mở video...")
         self._update_controls()
@@ -711,32 +727,66 @@ class TrafficSignApp(tk.Tk):
                 last_sent[0] = now
                 self._worker_events.put(("video_frame", revision, frame, annotated, detections, index, total))
 
+        def on_pause(frame, annotated, detections, index, total):  # luôn gửi đúng khung mà luồng dừng lại
+            self._worker_events.put(("video_frame", revision, frame, annotated, detections, index, total, True))
+
         try:
             from src.predict_video import predict_video
 
             summary = predict_video(
-                model, source, target, confidence, on_frame=on_frame, stop=self._video_stop.is_set
+                model, source, target, confidence, on_frame=on_frame, stop=self._video_stop.is_set,
+                resume=self._video_resume, on_pause=on_pause,
             )
             self._worker_events.put(("video_done", revision, summary))
         except Exception as error:
             self._worker_events.put(("video_error", revision, f"{type(error).__name__}: {error}"))
 
-    def _show_video_frame(self, revision, frame, annotated, detections, index, total):
+    def _show_video_frame(self, revision, frame, annotated, detections, index, total, paused=False):
         if revision != self._input_revision:
             return
+        image = bgr_to_rgb_image(annotated)
         self.original_panel.set_image(bgr_to_rgb_image(frame))
-        self.result_panel.set_image(bgr_to_rgb_image(annotated))
+        self.result_panel.set_image(image)
         self._fill_results(detections)
-        if self._video_running:
-            self.status.set(f"Đang nhận diện video: khung {index}/{total or '?'}. Bấm Dừng video để dừng.")
+        if paused and not self._video_resume.is_set():  # bỏ qua tin cũ nếu đã bấm Chạy tiếp hoặc Dừng
+            self._paused = (image, f"{self._video_stem}_khung_{index}.jpg")
+            self.status.set(
+                f"Đã tạm dừng ở khung {index}/{total or '?'}. Bấm Lưu kết quả để lưu khung này, "
+                "Chạy tiếp để xử lý tiếp hoặc Dừng video để dừng hẳn."
+            )
+            self._update_controls()
+        elif self._video_running and self._video_resume.is_set() and not self._video_stop.is_set():
+            self.status.set(
+                f"Đang nhận diện video: khung {index}/{total or '?'}. Bấm Tạm dừng để xem hoặc lưu khung, "
+                "Dừng video để dừng hẳn."
+            )
+
+    def toggle_pause(self):
+        if not self._video_running or self._video_stop.is_set():
+            return
+        if self._paused is not None:
+            self._reset_pause()
+            self.status.set("Chạy tiếp video từ khung đang dừng...")
+        else:
+            self._video_resume.clear()
+            self.status.set("Đang tạm dừng, chờ xử lý xong khung hiện tại...")
+        self._update_controls()
+
+    def _reset_pause(self):
+        """Xóa trạng thái tạm dừng và mở khóa luồng video (chạy tiếp, dừng hẳn, xong, lỗi hoặc đóng app)."""
+        self._paused = None
+        self._video_resume.set()
 
     def stop_video(self):
         if self._video_running:
             self._video_stop.set()
+            self._reset_pause()
             self.status.set("Đang dừng video, phần đã xử lý vẫn được lưu...")
+            self._update_controls()
 
     def _finish_video(self, revision: int, summary: dict):
         self._video_running = False
+        self._reset_pause()
         self._update_controls()
         if revision != self._input_revision:
             return
@@ -749,6 +799,7 @@ class TrafficSignApp(tk.Tk):
 
     def _fail_video(self, revision: int, error_message: str):
         self._video_running = False
+        self._reset_pause()
         self._update_controls()
         if revision != self._input_revision:
             return
@@ -770,7 +821,9 @@ class TrafficSignApp(tk.Tk):
         )
 
     def save_result(self):
-        if (
+        if self._paused is not None:  # đang tạm dừng video: chỉ lưu khung đang dừng
+            image, suggested_name = self._paused
+        elif (
             self.annotated_image is None
             or self._result_revision != self._input_revision
             or self.selected_path is None
@@ -778,8 +831,8 @@ class TrafficSignApp(tk.Tk):
             self.status.set("Chưa có kết quả hiện tại để lưu. Hãy nhận diện ảnh trước.")
             self._update_controls()
             return
-
-        suggested_name = f"{self.selected_path.stem}_ket_qua.jpg"
+        else:
+            image, suggested_name = self.annotated_image, f"{self.selected_path.stem}_ket_qua.jpg"
         filename = filedialog.asksaveasfilename(
             parent=self,
             title="Lưu ảnh kết quả",
@@ -802,17 +855,18 @@ class TrafficSignApp(tk.Tk):
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             image_format = "PNG" if target.suffix.lower() == ".png" else "JPEG"
-            self.annotated_image.save(target, format=image_format, quality=95)
+            image.save(target, format=image_format, quality=95)
         except (OSError, ValueError) as error:
             messagebox.showerror("Không lưu được ảnh", str(error), parent=self)
             self.status.set(f"Không lưu được ảnh: {error}")
             return
 
-        self.status.set(f"Đã lưu ảnh kết quả: {target}")
+        self.status.set(f"Đã lưu {'khung hình' if self._paused is not None else 'ảnh kết quả'}: {target}")
         messagebox.showinfo("Đã lưu kết quả", f"Ảnh đã được lưu tại:\n{target}", parent=self)
 
     def close(self):
         self._video_stop.set()
+        self._reset_pause()  # luồng video đang chờ ở trạng thái tạm dừng phải được mở khóa
         self._closed = True
         self.destroy()
 

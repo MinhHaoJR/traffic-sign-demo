@@ -23,10 +23,14 @@ def default_output(video_path) -> Path:
     return PREDICTIONS_OUTPUT_DIR / "videos" / f"{Path(video_path).stem}_ket_qua.mp4"
 
 
-def predict_video(model, video_path, out_path, confidence: float = 0.25, on_frame=None, stop=None) -> dict:
+def predict_video(model, video_path, out_path, confidence: float = 0.25, on_frame=None, stop=None,
+                  resume=None, on_pause=None) -> dict:
     """
     on_frame(frame_bgr, annotated_bgr, detections, index, total) được gọi sau mỗi khung;
     stop() trả True để dừng sớm. Trả về thống kê; phần video đã xử lý vẫn được lưu khi dừng.
+    resume là threading.Event: khi bị clear, vòng lặp gọi on_pause (cùng tham số như on_frame, với khung vừa
+    xử lý xong) rồi chặn chờ giữa hai khung tới khi resume.set(); video vẫn mở, không ghi thêm gì.
+    Muốn dừng hẳn khi đang chờ thì đặt cờ stop rồi resume.set().
     """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -56,6 +60,10 @@ def predict_video(model, video_path, out_path, confidence: float = 0.25, on_fram
             per_class.update({d["class_name"] for d in dets})
             if on_frame:
                 on_frame(frame, annotated, dets, index, total)
+            if resume is not None and not resume.is_set():
+                if on_pause:
+                    on_pause(frame, annotated, dets, index, total)
+                resume.wait()
     finally:
         cap.release()
         if writer is not None:
