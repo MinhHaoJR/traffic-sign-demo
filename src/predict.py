@@ -30,7 +30,9 @@ COLORS_BGR = {
     20: (230, 216, 173), 21: (42, 42, 165), 22: (0, 0, 255), 23: (122, 150, 233), 28: (128, 128, 128),
     24: (255, 0, 0), 25: (255, 255, 0), 26: (0, 255, 255), 27: (211, 0, 148),
 }
-_FONT_CANDIDATES = ["arial.ttf", "segoeui.ttf", "DejaVuSans.ttf"]  # cần font có dấu tiếng Việt
+DEFAULT_BGR = (0, 110, 0)  # lớp không có trong COLORS_BGR (biển dạy rồi train lại): xanh lá đậm, chữ trắng dễ đọc
+FEW_SHOT_RGB = ((255, 170, 0), (20, 33, 61))  # biển gọi tên nhờ học nhanh: khung cam, nhãn nền xanh đen
+_FONT_CANDIDATES =["arial.ttf", "segoeui.ttf", "DejaVuSans.ttf"]  # cần font có dấu tiếng Việt
 OTHER_CONF = 0.10  # ngưỡng riêng cho "Biển báo khác" khi bật học nhanh
 
 
@@ -78,14 +80,18 @@ def _draw(img_bgr: np.ndarray, detections: list) -> np.ndarray:
     draw = ImageDraw.Draw(img)
     font = _font(max(14, img.width // 45))
     for d in detections:
-        b, g, r = COLORS_BGR.get(d["class_id"], (0, 255, 0))
+        if d.get("few_shot"):
+            line, fill = FEW_SHOT_RGB
+        else:
+            b, g, r = COLORS_BGR.get(d["class_id"], DEFAULT_BGR)
+            line = fill = (r, g, b)
         x1, y1, x2, y2 = d["bbox"]
-        draw.rectangle([x1, y1, x2, y2], outline=(r, g, b), width=max(2, img.width // 300))
+        draw.rectangle([x1, y1, x2, y2], outline=line, width=max(2, img.width // 300))
         label = f'{d["class_name"]} {d["confidence"]:.2f}'
         tx1, ty1, tx2, ty2 = draw.textbbox((0, 0), label, font=font)
         th = ty2 - ty1 + 6
         top = y1 - th if y1 - th >= 0 else y1  # nhãn nằm trên khung, hết chỗ thì xuống trong khung
-        draw.rectangle([x1, top, x1 + (tx2 - tx1) + 8, top + th], fill=(r, g, b))
+        draw.rectangle([x1, top, x1 + (tx2 - tx1) + 8, top + th], fill=fill)
         draw.text((x1 + 4, top + 2 - ty1), label, fill=(255, 255, 255), font=font)
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
@@ -114,7 +120,9 @@ def predict_frame(model, img: np.ndarray, confidence: float = 0.25):
     oid = next((i for i, n in names.items() if n == "Biển báo khác"), None) if fs is not None else None
     # Biển lạ thường được YOLO chấm điểm thấp: lớp "Biển báo khác" dùng ngưỡng riêng thấp hơn.
     low = min(confidence, OTHER_CONF) if oid is not None else confidence
-    result = model.predict(source=img, conf=low, verbose=False)[0]
+    # agnostic_nms: một biển chỉ giữ một khung, không để hai khung khác lớp chồng lên nhau
+    # (đo trên val và ảnh cận cảnh: ít khung sai hơn, F1 tăng; xem docs/demo_checklist.md)
+    result = model.predict(source=img, conf=low, agnostic_nms=True, verbose=False)[0]
 
     detections = []
     for box in result.boxes:

@@ -26,6 +26,7 @@ from src.paths import CLASSES_PATH, ENCODER_PATH, FEEDBACK_DIR, FEW_SHOT_PATH, P
 
 CROP = 96
 MATCH_SIM = 0.88  # cosine tối thiểu để gán tên cho biển "khác"; đo bằng biển giữ riêng (xem README mục 7)
+VERIFY_SIM = 0.65  # khung YOLO gán lớp có tên mà không giống mẫu nào của lớp đó tới mức này thì bỏ (đo trên val)
 OTHER_NAME = "Biển báo khác"
 UNKNOWN_NAME = "Biển chưa biết"
 SHOTS_PER_CLASS = 30
@@ -147,7 +148,9 @@ class FewShot:
     def refine(self, img: np.ndarray, detections: list, names: dict) -> list:
         """Khung "Biển báo khác": đặt tên theo mẫu gần nhất, không đủ giống thì là "Biển chưa biết".
         Khung YOLO đã gán lớp: chỉ đổi khi giống một mẫu người dùng đã dạy hơn mọi mẫu của lớp YOLO chọn
-        (ví dụ biển ngoặt phải mới dạy mà YOLO nhầm thành ngoặt trái)."""
+        (ví dụ biển ngoặt phải mới dạy mà YOLO nhầm thành ngoặt trái).
+        Khung YOLO gán lớp có tên nhưng không giống mẫu nào của lớp đó (< VERIFY_SIM) bị bỏ: thường là logo,
+        đèn, vật tròn bị nhận nhầm."""
         oid = other_id(names)
         for d in detections:
             if d["class_id"] == oid:
@@ -161,14 +164,17 @@ class FewShot:
             if len(self.emb) == 0:
                 return detections
             sim, cls, taught = emb @ self.emb.T, self.cls, self.taught
+        drop = set()
         for row, i in zip(sim, idx):
             d, j = detections[i], int(row.argmax())
             cid, s = int(cls[j]), float(row[j])
-            if s < MATCH_SIM or cid == d["class_id"] or cid == oid:
-                continue
-            if d["class_id"] == oid or (taught[j] and s > row[cls == d["class_id"]].max(initial=0.0)):
+            own = cls == d["class_id"]
+            if s >= MATCH_SIM and cid not in (d["class_id"], oid) and (
+                    d["class_id"] == oid or (taught[j] and s > row[own].max(initial=0.0))):
                 d.update(class_id=cid, class_name=names.get(cid, f"Class {cid}"), confidence=s, few_shot=True)
-        return detections
+            elif d["class_id"] != oid and own.any() and row[own].max() < VERIFY_SIM:
+                drop.add(i)
+        return [d for i, d in enumerate(detections) if i not in drop]
 
     def teach(self, img: np.ndarray, bbox, class_id: int, detections: list) -> Path:
         """Thêm biển trong `bbox` làm mẫu của `class_id` và lưu ảnh + nhãn vào kho phản hồi."""

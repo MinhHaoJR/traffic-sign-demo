@@ -118,6 +118,48 @@ Phép thử học biển mới với model mới: Giới hạn chiều cao gọi
 
 Đã thử và bỏ: giữ lại khung YOLO điểm thấp khi bộ mã hóa thấy rất giống một lớp. Trên val, bộ lọc tốt nhất chỉ nâng F1 từ 0,864 lên 0,868, cứu được bao nhiêu biển thì thêm gần bấy nhiêu khung sai (nhiều khung là vòm gạch giống ảnh nền của lớp "rẽ phải"), và không cứu được biển nào trong ảnh trên.
 
+### Đợt kiểm thử 2026-11-19 (biển có biển phụ, chạm mép ảnh)
+
+Ảnh người dùng gửi (843×843): biển "Cấm rẽ trái" chạm mép trên, bên dưới có 3 biển phụ (mô tô, xe ba bánh, xe đạp). App không hiện biển nào kể cả ở ngưỡng 0,05: YOLO khoanh đúng chỗ nhưng chỉ 0,026 điểm.
+* Thêm 80 px nền phía trên: khoanh được, 0,86, nhưng gọi nhầm "Cấm xe hai và ba bánh" (biển phụ có hình mô tô và xe ba bánh giống lớp này). Thêm nền và xóa biển phụ: "Cấm rẽ trái" 0,28.
+* Nhận diện ở 1280 px: "Cấm rẽ trái" 0,78. Nhưng dùng 960 hoặc 1280 cho mọi ảnh làm mAP@0.5 trên val giảm (640: 0,899; 960: 0,893; 1280: 0,881).
+
+Đã thử và bỏ: chỉ chạy lại ở 1280 px khi ảnh không có khung nào ở 640 (ngưỡng 0,25). F1 tính theo khung, IoU ≥ 0,5:
+
+| Bộ | Không dự phòng | Dự phòng, ngưỡng 0,25 | Dự phòng, ngưỡng 0,5 |
+| --- | :-: | :-: | :-: |
+| Val (30/1332 ảnh chạy dự phòng) | 0,8596 | 0,8627 (+20 đúng, +12 sai) | 0,8636 (+18 đúng, +5 sai) |
+| Cận cảnh (19/842 ảnh chạy dự phòng) | 0,9232 | 0,9183 (+1 đúng, +13 sai) | 0,9211 (0 đúng, +5 sai) |
+
+Trên ảnh cận cảnh (giống ảnh người dùng nhất) bước dự phòng không cứu được biển nào mà chỉ thêm khung sai; ảnh không có biển (chưa đo được, vì val và test ảnh nào cũng có biển) cũng sẽ luôn chạy dự phòng. Cách sửa đúng là thêm ảnh thật có biển phụ rồi train lại.
+
+### Đợt kiểm thử 2026-11-19 (ảnh ghép 2 biển, nhiều khung thừa)
+
+Ảnh người dùng gửi (515×388, ghép 2 ảnh: "Cấm đỗ xe" và "Cấm ô tô khách và ô tô tải" có bảng giờ bên dưới), ngưỡng 0,05: app hiện 7 khung. Nguyên nhân:
+* Một biển có hai khung khác lớp chồng lên nhau, vì NMS mặc định của YOLO chỉ gộp khung cùng lớp: "Cấm đỗ xe" 0,51 và "Cấm dừng và đỗ xe" 0,28; "Biển báo khác" 0,50 và "Cấm ô tô khách và ô tô tải" 0,17.
+* Logo tròn ở góc trên bị gọi "Giới hạn tốc độ 40 km/h" 0,67; bảng giờ bị gọi "Biển báo khác" 0,67 (hiện "Biển chưa biết").
+* Ngưỡng 0,05 giữ cả khung rất yếu ("Giao nhau với đường ưu tiên" 0,05).
+
+Đã sửa: `src/predict.py` dùng `agnostic_nms=True` (một biển chỉ giữ một khung). F1 theo khung, IoU ≥ 0,5:
+
+| Bộ | Ngưỡng 0,25: cũ → mới | Ngưỡng 0,05: cũ → mới |
+| --- | :-: | :-: |
+| Val (1.332 ảnh) | 0,8596 → 0,8620 (khung sai 331 → 300) | 0,7773 → 0,7868 |
+| Cận cảnh (842 ảnh) | 0,9232 → 0,9301 (93 → 72) | 0,8820 → 0,9044 |
+| Test (1.197 ảnh, đo sau khi chọn) | 0,8707 → 0,8705 (318 → 285) | 0,8050 → 0,8157 |
+
+Ảnh trên sau khi sửa, ngưỡng 0,25: còn 4 khung. "Cấm đỗ xe" 0,51 đúng; biển xe khách/xe tải (chạm mép trên) hiện "Biển chưa biết" 0,50, dạy được bằng Đặt tên biển; logo và bảng giờ vẫn bị khoanh (cần thêm dữ liệu). Số liệu trong `docs/test_metrics.csv` vẫn đo bằng `model.val` mặc định, không đổi.
+
+Sửa thêm: `src/few_shot.py` bỏ khung YOLO gán lớp có tên mà ảnh cắt không giống mẫu nào của chính lớp đó (cosine < 0,65, `VERIFY_SIM`). Logo trong ảnh trên chỉ giống mẫu "40 km/h" dưới 0,65 nên bị bỏ; "Cấm đỗ xe" giống 0,94 nên giữ. F1 theo khung, ngưỡng 0,25, đã có agnostic NMS:
+
+| Bộ | Không kiểm tra | Bỏ khung < 0,65 | Khung bị bỏ (trong đó khung đúng) |
+| --- | :-: | :-: | :-: |
+| Val | 0,8620 | 0,8787 | 78 (1) |
+| Cận cảnh | 0,9301 | 0,9371 | 25 (4) |
+| Test (đo sau khi chọn 0,65) | 0,8705 | 0,8886 | 90 (0) |
+
+Ngưỡng 0,65 chọn trên val và cận cảnh (0,60 → 0,75 cho kết quả gần nhau). Ảnh trên còn 3 khung ở ngưỡng 0,25: "Cấm đỗ xe" và hai "Biển chưa biết" (biển xe khách/xe tải chạm mép, bảng giờ). Mặt trái: biển ngoài 28 lớp bị YOLO gán nhầm lớp (ví dụ biển cấm xích lô trong ảnh ngày 2026-11-18, trước hiện "Cấm ô tô" 0,30) giờ bị bỏ thay vì hiện tên sai; muốn dạy thì kéo chuột vẽ khung.
+
 ## Nhật ký lỗi
 
 | Ngày | Bước tái hiện | Lỗi quan sát được | Cách sửa | Kết quả kiểm tra lại |

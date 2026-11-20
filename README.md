@@ -261,6 +261,7 @@ Khi gặp biển chưa được train, hệ thống học theo hai tầng:
 3. So độ giống (cosine) với ảnh mẫu của mọi lớp: 30 mẫu mỗi lớp có sẵn và các ảnh người dùng đã dạy.
    * Khung "Biển báo khác": giống một ảnh mẫu từ 0,88 trở lên thì lấy tên lớp đó, nếu không thì hiện **Biển chưa biết**.
    * Khung YOLO đã gán một lớp cũ: chỉ đổi tên khi một ảnh **đã dạy** giống từ 0,88 và giống hơn mọi mẫu của lớp YOLO chọn. Nhờ vậy dạy biển mới không làm hỏng các lớp cũ, và người dùng sửa được nhãn sai.
+   * Khung YOLO đã gán một lớp cũ nhưng không giống mẫu nào của lớp đó từ 0,65 trở lên thì bị bỏ (thường là logo, đèn, vật tròn). Trên tập test, bước này bỏ 90 khung sai, không bỏ khung đúng nào; F1 theo khung 0,871 → 0,889 (chi tiết trong `docs/demo_checklist.md`).
 4. Mỗi lần dạy, ảnh và nhãn YOLO được lưu vào `data/feedback/` (cùng các khung khác trong ảnh làm nhãn phụ) để dùng cho `learn_new`.
 
 Bộ mã hóa được train một lần trên ảnh cắt của cả 3 bộ dữ liệu (gồm cả các lớp nguồn không thuộc 28 lớp), nên học được cách phân biệt biển báo nói chung, không chỉ 28 lớp.
